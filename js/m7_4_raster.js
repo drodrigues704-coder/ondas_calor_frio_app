@@ -160,8 +160,15 @@ function buildDatasetURL() {
 ============================================================================= */
 
 /*
-    Obtém o caminho do GeoTIFF pretendido e atualiza o estado interno do
-    URL atual.
+    Resolve o caminho do GeoTIFF pretendido pela seleção atual. Função
+    pura (não mexe em "currentDatasetURL") — quem chama decide se/quando
+    esse estado deve ser atualizado. É crítico manter assim: refreshRaster()
+    precisa de comparar o caminho novo contra o "currentDatasetURL" antigo
+    para saber se algo mudou; se esta função escrevesse em
+    "currentDatasetURL" antes dessa comparação, a comparação ficaria
+    sempre "igual a si próprio" e o raster deixaria de ser redesenhado
+    sempre que o utilizador mudasse variável/ano/evento/metodologia
+    mantendo a mesma região (foi exatamente este bug que aconteceu aqui).
 */
 async function getCurrentDatasetURL() {
     await loadNutsSlugs();
@@ -172,12 +179,10 @@ async function getCurrentDatasetURL() {
         return null;
     }
 
-    currentDatasetURL = path;
-
     console.log("GeoTIFF:");
-    console.log(currentDatasetURL);
+    console.log(path);
 
-    return currentDatasetURL;
+    return path;
 }
 
 /* =============================================================================
