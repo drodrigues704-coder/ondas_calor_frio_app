@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitorização de Ondas de Calor e Frio</title>
+
+    <!-- ========================================================= -->
+    <!-- Leaflet                                                   -->
+    <!-- Versão fixa (1.9.4) — evita quebras silenciosas por        -->
+    <!-- alterações na tag "latest" do CDN.                         -->
+    <!-- ========================================================= -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- ========================================================= -->
+    <!-- GeoRaster                                                  -->
+    <!--                                                             -->
+    <!-- Só usamos "georaster" para descodificar o GeoTIFF          -->
+    <!-- (parseGeoraster, em m7_4_raster.js) e obter a grelha de     -->
+    <!-- valores + bounding box. A pintura em si não usa esta        -->
+    <!-- biblioteca nem canvas/imageOverlay — é feita por             -->
+    <!-- turf.isobands() + L.geoJSON (ver bloco Turf.js abaixo).      -->
+    <!-- ========================================================= -->
+    <script src="https://unpkg.com/georaster@1.6.0"></script>
+
+    <!-- ========================================================= -->
+    <!-- Turf.js                                                    -->
+    <!--                                                             -->
+    <!-- Usado só para turf.isobands() — gera os polígonos de       -->
+    <!-- isobanda (áreas preenchidas entre isolinhas) a partir da    -->
+    <!-- grelha de valores do raster, em vez de pintar pixel a       -->
+    <!-- pixel num canvas (ver m7_4_raster.js: drawRaster()).        -->
+    <!-- ========================================================= -->
+    <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
+
+    <!-- ========================================================= -->
+    <!-- Chart.js                                                  -->
+    <!-- ========================================================= -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- ========================================================= -->
+    <!-- CSS da aplicação                                         -->
+    <!-- ========================================================= -->
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+
+    <!-- ========================================================= -->
+    <!-- Contentor principal                                       -->
+    <!-- ========================================================= -->
+    <div id="app">
+
+        <!-- Painel esquerdo -->
+        <aside id="left-panel">
+            <section class="panel-content">
+                <h1>🌍 Monitorização de Ondas de Calor e Frio</h1>
+                <p class="subtitle">CERRA · Portugal Continental · 2001–2025</p>
+
+                <details id="about-panel">
+                    <summary>ℹ️ Sobre a aplicação</summary>
+
+                    <h3>O que é</h3>
+                    <p>
+                        Visualização de indicadores climáticos relacionados com ondas de
+                        calor e ondas de frio em Portugal Continental, entre 2001 e 2025,
+                        a partir dos dados de reanálise CERRA (Copernicus).
+                    </p>
+
+                    <h3>Metodologias</h3>
+                    <p>
+                        <strong>OMM</strong> — deteção baseada em limiares fixos, definidos
+                        segundo a metodologia da Organização Meteorológica Mundial.
+                    </p>
+                    <p>
+                        <strong>Percentis</strong> — deteção baseada em limiares por
+                        percentil (P90 para calor, P10 para frio), calculados a partir da
+                        climatologia local de cada célula.
+                    </p>
+
+                    <h3>Representação no mapa</h3>
+                    <p>
+                        A resolução nativa dos dados CERRA é de ~5.5 km. Para uma leitura
+                        mais clara, o mapa aplica uma suavização visual (interpolação
+                        cúbica, o método padrão para superfícies contínuas como
+                        temperatura ou duração) antes de desenhar as isobandas — isto não
+                        acrescenta informação real. O download do GeoTIFF e as séries
+                        temporais usam sempre os valores da grelha nativa, sem suavização.
+                    </p>
+
+                    <h3>Como usar</h3>
+                    <ol>
+                        <li>Escolhe a metodologia (OMM ou Percentis).</li>
+                        <li>Escolhe uma região (NUTS II) — o raster só aparece depois de
+                            selecionares uma região.</li>
+                        <li>Escolhe o tipo de evento, a variável, a estatística e o ano.</li>
+                        <li>Clica no mapa para veres a série temporal desse ponto exato.</li>
+                        <li>Usa "Download GeoTIFF" para descarregar o raster atualmente
+                            representado.</li>
+                    </ol>
+                </details>
+
+                <hr>
+
+                <h2>Seleção</h2>
+
+                <label for="nuts-select">Região NUTS II</label>
+                <select id="nuts-select">
+                    <option>A carregar...</option>
+                </select>
+
+                <label>Metodologia</label>
+                <div id="method-toggle" class="segmented-control">
+                    <button type="button" class="segmented-option active" data-method="OMM">OMM</button>
+                    <button type="button" class="segmented-option" data-method="Percentis">Percentis</button>
+                </div>
+
+                <label for="event-select">Tipo de Evento</label>
+                <select id="event-select">
+                    <option value="Heat">Ondas de Calor</option>
+                    <option value="Cold">Ondas de Frio</option>
+                </select>
+
+                <label for="variable-select">Variável</label>
+                <select id="variable-select"></select>
+
+                <label for="stat-select">Estatística</label>
+                <select id="stat-select"></select>
+
+                <label for="year-slider">Ano</label>
+                <input type="range" id="year-slider" min="2001" max="2025" value="2001">
+                <div id="year-value">2001</div>
+
+                <button id="download-button">📥 Download GeoTIFF</button>
+            </section>
+        </aside>
+
+        <!-- Mapa -->
+        <main id="map-container">
+            <div id="map"></div>
+            <!-- Legenda Dinâmica -->
+            <div id="legend"></div>
+        </main>
+
+        <!-- Painel direito -->
+        <aside id="right-panel">
+            <section class="panel-content">
+                <h2>Série Temporal Regional</h2>
+                <canvas id="regional-chart" height="220"></canvas>
+                <hr>
+                <h2>Série Temporal do Ponto</h2>
+                <canvas id="point-chart" height="220"></canvas>
+            </section>
+        </aside>
+
+    </div>
+
+    <!-- ========================================================= -->
+    <!-- JavaScript da aplicação                                   -->
+    <!-- Ordem rigorosa para cumprimento de dependências           -->
+    <!-- ========================================================= -->
+    <script src="js/m7_1_config.js"></script>
+    <script src="js/m7_2_map.js"></script>
+    <script src="js/m7_4_nuts.js"></script>
+    <script src="js/m7_4_raster.js"></script>
+    <script src="js/m7_5_charts.js"></script>
+    <script src="js/m7_6_ui.js"></script>
+    <!-- Os controlos e listeners são carregados após a UI, Gráficos e Mapas estarem declarados -->
+    <script src="js/m7_3_controls.js"></script>
+    <!-- O Main orquestra a execução final -->
+    <script src="js/m7_7_main.js"></script>
+
+</body>
+
+</html>

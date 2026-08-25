@@ -1,0 +1,535 @@
+/* ============================================================================
+   WEBAPP — Ondas de Calor e Frio
+   style.css
+
+   Autor:
+   Daniel Rodrigues
+
+   Descrição
+   ----------
+   Estrutura principal e estilização da aplicação (tema escuro).
+============================================================================ */
+
+/* ============================================================================
+   PALETA (tema escuro)
+============================================================================ */
+
+:root {
+    --bg: #0b0f14;
+    --panel: #12161d;
+    --panel-alt: #171c25;
+    --border: #262d3a;
+    --text: #e5e9f0;
+    --text-muted: #8b95a5;
+    --accent: #3b82f6;
+    --accent-hover: #2563eb;
+}
+
+/* ============================================================================
+   RESET BÁSICO
+============================================================================ */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+/* ============================================================================
+   BODY
+============================================================================ */
+
+html,
+body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    font-family: "Segoe UI", Arial, Helvetica, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+}
+
+/* ============================================================================
+   APP
+============================================================================ */
+
+#app {
+    display: flex;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* ============================================================================
+   PAINÉIS LATERAIS
+============================================================================ */
+
+#left-panel {
+    width: 340px;
+    min-width: 340px;
+    height: 100%;
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+#right-panel {
+    width: 420px;
+    min-width: 420px;
+    height: 100%;
+    background: var(--panel);
+    border-left: 1px solid var(--border);
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* ============================================================================
+   MAPA
+============================================================================ */
+
+#map-container {
+    flex: 1;
+    position: relative;
+    overflow: visible;
+    /* ou auto */
+    height: 100%;
+}
+
+
+#map {
+    width: 100%;
+    height: 100%;
+}
+
+/* ============================================================================
+   CONTEÚDO INTERNO DOS PAINÉIS
+============================================================================ */
+
+.panel-content {
+    padding: 16px;
+}
+
+/* ============================================================================
+   TÍTULOS E TEXTO
+============================================================================ */
+
+h1 {
+    font-size: 21px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: var(--text);
+    letter-spacing: 0.2px;
+}
+
+h2 {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    margin-top: 20px;
+    margin-bottom: 10px;
+    color: var(--text-muted);
+}
+
+.subtitle {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+}
+
+/* ============================================================================
+   PAINEL "SOBRE A APLICAÇÃO"
+============================================================================ */
+
+#about-panel {
+    margin-top: 12px;
+    padding: 10px 12px;
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+#about-panel summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--text);
+    outline: none;
+}
+
+#about-panel h3 {
+    font-size: 13px;
+    font-weight: 700;
+    margin-top: 12px;
+    margin-bottom: 4px;
+    color: var(--text);
+}
+
+#about-panel p {
+    line-height: 1.5;
+    margin-bottom: 6px;
+}
+
+#about-panel ol {
+    margin: 6px 0 0 18px;
+    line-height: 1.6;
+}
+
+/* ============================================================================
+   LINHAS SEPARADORAS
+============================================================================ */
+
+hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 18px 0;
+}
+
+/* ============================================================================
+   FORMULÁRIOS E CONTROLOS
+============================================================================ */
+
+label {
+    display: block;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    margin-top: 14px;
+    margin-bottom: 6px;
+    color: var(--text-muted);
+}
+
+select {
+    width: 100%;
+    padding: 9px 10px;
+    font-size: 14px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--panel-alt);
+    color: var(--text);
+    cursor: pointer;
+}
+
+select:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+}
+
+/* Slider de Ano */
+#year-slider {
+    width: 100%;
+    margin-top: 6px;
+    cursor: pointer;
+    accent-color: var(--accent);
+}
+
+#year-value {
+    text-align: center;
+    font-weight: 700;
+    font-size: 15px;
+    margin-top: 8px;
+    color: var(--accent);
+}
+
+/* Alternador de Metodologia (OMM / Percentis) */
+.segmented-control {
+    display: flex;
+    margin-top: 6px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.segmented-option {
+    flex: 1;
+    padding: 8px 10px;
+    border: none;
+    background: var(--panel-alt);
+    color: var(--text-muted);
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.segmented-option + .segmented-option {
+    border-left: 1px solid var(--border);
+}
+
+.segmented-option.active {
+    background: var(--accent);
+    color: white;
+}
+
+.segmented-option:hover:not(.active) {
+    background: #1e2531;
+}
+
+/* Botão Download */
+#download-button {
+    width: 100%;
+    margin-top: 18px;
+    padding: 11px;
+    border: none;
+    border-radius: 6px;
+    background: var(--accent);
+    color: white;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+#download-button:hover {
+    background: var(--accent-hover);
+}
+
+#download-button:active {
+    transform: scale(0.98);
+}
+
+/* ============================================================================
+   GRÁFICOS (Chart.js)
+============================================================================ */
+
+/* Usamos max-width e um contentor flexível para evitar quebras de proporção do Canvas.
+   Restrito aos canvas dos gráficos Chart.js — um seletor "canvas" genérico
+   também apanhava os tiles <canvas> que o Leaflet cria para desenhar o
+   raster, forçando-lhes fundo/tamanho errados. As cores dos eixos/grelha
+   dos gráficos (tema escuro) são definidas em m7_5_charts.js, não aqui —
+   o Chart.js pinta o texto/linhas diretamente no canvas, CSS não alcança. */
+#regional-chart,
+#point-chart {
+    display: block;
+    width: 100% !important;
+    max-height: 240px;
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px;
+    margin-top: 8px;
+}
+
+/* ============================================================================
+   LEGENDA DO MAPA (barra em gradiente contínuo, flutuante sobre o mapa)
+============================================================================ */
+
+#legend {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    width: 270px;
+    background: rgba(18, 22, 29, 0.88);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    padding: 14px;
+    /* Ajustado para ficar perfeitamente alinhado com o z-index dos controlos do Leaflet */
+    z-index: 1000;
+    font-size: 13px;
+    pointer-events: auto;
+    /* Garante interação se necessário */
+}
+
+#legend h3 {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: var(--text);
+}
+
+.legend-subtitle {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+}
+
+#legend p {
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.4;
+}
+
+/* Barra de gradiente contínuo — cada classe ocupa uma fração igual da
+   largura, com transição direta (hard stop) entre cores, para continuar a
+   representar fielmente a classificação discreta usada no raster, mas com
+   a leitura visual de um gradiente científico contínuo. */
+.legend-gradient {
+    height: 14px;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.legend-ticks {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 6px;
+    font-size: 10.5px;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================================
+   LEAFLET CUSTOMIZAÇÃO
+============================================================================ */
+
+.leaflet-container {
+    background: var(--bg);
+}
+
+.leaflet-control-zoom {
+    border: none !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4) !important;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.leaflet-control-zoom a,
+.leaflet-control-layers-toggle {
+    background-color: var(--panel) !important;
+    color: var(--text) !important;
+    border-color: var(--border) !important;
+}
+
+.leaflet-control-zoom a:hover {
+    background-color: var(--panel-alt) !important;
+}
+
+.leaflet-control-layers {
+    background: var(--panel) !important;
+    color: var(--text) !important;
+    border: 1px solid var(--border);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4) !important;
+}
+
+.leaflet-control-layers-expanded {
+    padding: 10px 12px;
+}
+
+.leaflet-control-attribution {
+    background: rgba(18, 22, 29, 0.75) !important;
+    color: var(--text-muted) !important;
+}
+
+.leaflet-control-attribution a {
+    color: var(--text-muted) !important;
+}
+
+/* ============================================================================
+   SCROLLBAR CUSTOMIZADO
+============================================================================ */
+
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--panel);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #384254;
+}
+
+/* ============================================================================
+   RESPONSIVIDADE (MEDIA QUERIES)
+============================================================================ */
+
+@media (max-width: 1400px) {
+    #left-panel {
+        width: 300px;
+        min-width: 300px;
+    }
+
+    #right-panel {
+        width: 360px;
+        min-width: 360px;
+    }
+}
+
+@media (max-width: 1100px) {
+    #app {
+        flex-direction: column;
+        overflow-y: auto;
+        /* Permite scroll da app inteira se os ecrãs forem muito pequenos */
+        height: auto;
+    }
+
+    #left-panel,
+    #right-panel {
+        width: 100%;
+        min-width: auto;
+        height: auto;
+        border: none;
+        overflow: visible;
+        /* Deixa o fluxo natural controlar a altura */
+    }
+
+    #left-panel {
+        border-bottom: 1px solid var(--border);
+    }
+
+    #right-panel {
+        border-top: 1px solid var(--border);
+    }
+
+    #map-container {
+        width: 100%;
+        height: 500px;
+        /* Garante uma altura fixa confortável para o mapa em tablets/telemóveis */
+        flex: none;
+    }
+}
+
+@media (max-width: 768px) {
+    h1 {
+        font-size: 18px;
+    }
+
+    h2 {
+        font-size: 12px;
+    }
+
+    .panel-content {
+        padding: 12px;
+    }
+
+    #legend {
+        width: 220px;
+        font-size: 11px;
+        bottom: 10px;
+        left: 10px;
+    }
+}
+
+/* ============================================================================
+   ANIMAÇÕES SUAVES
+============================================================================ */
+
+button,
+select,
+input[type="range"] {
+    transition: all 0.2s ease-in-out;
+}
+
+#legend {
+    transition: all 0.25s ease-in-out;
+}
+
+.leaflet-layer,
+.leaflet-tile,
+.leaflet-tile-container {
+    box-sizing: content-box !important;
+}
