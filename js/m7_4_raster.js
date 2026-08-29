@@ -387,6 +387,38 @@ function reamostrarBicubica(banda, largura, altura, factor, min, max) {
 }
 
 /* =============================================================================
+    LIMITE DA REGIÃO (para recortar as isobandas — ver drawRaster())
+============================================================================= */
+
+/*
+    Cache do polígono da última NUTS pedida, já reprojetado para
+    EPSG:3857 (metros) — evita reprojetar a cada redesenho quando só a
+    variável/ano/metodologia muda, não a região.
+*/
+let nutsMercatorCache = { nome: null, poligono: null };
+
+/*
+    Devolve o polígono (GeoJSON, EPSG:3857) da região pedida, ou null se
+    a região não existir/ainda não estiver carregada (ex.: NUTS_II.geojson
+    a meio do fetch). Usa turf.toMercator() — os dados de origem
+    (NUTS_II.geojson) estão em WGS84, tal como todo o GeoJSON.
+*/
+function getNutsBoundaryMercator(nutsName) {
+    // Não reutiliza um resultado "null" em cache — só o hit positivo, para
+    // não prender permanentemente uma falha temporária (ex.: pedido antes
+    // do NUTS_II.geojson estar carregado).
+    if (nutsMercatorCache.nome === nutsName && nutsMercatorCache.poligono !== null) {
+        return nutsMercatorCache.poligono;
+    }
+
+    const feature = (typeof getNutsFeature === "function") ? getNutsFeature(nutsName) : null;
+    const poligono = feature ? turf.toMercator(feature) : null;
+
+    nutsMercatorCache = { nome: nutsName, poligono };
+    return poligono;
+}
+
+/* =============================================================================
     CRIAÇÃO DO LAYER LEAFLET
 ============================================================================= */
 
@@ -486,6 +518,32 @@ async function drawRaster() {
             feature.properties = feature.properties || {};
             feature.properties.corIndice = Math.min(indice, cores.length - 1);
         });
+
+        // Recorta cada isobanda ao limite EXATO da região (vetor↔vetor),
+        // em vez de confiar no recorte que os ficheiros pré-gerados já
+        // têm — esse segue a grelha CERRA (~5.5 km, em "escada") e a
+        // reamostragem bicúbica ainda alarga isso mais um pouco perto das
+        // bordas (ver sentinela de NoData acima). Sem este passo, as
+        // isobandas podiam ultrapassar visivelmente a fronteira real da
+        // NUTS. Mesma técnica validada noutro projeto (SPI_SPEI, com
+        // geopandas.clip em vez de turf.intersect).
+        const limiteRegiao = getNutsBoundaryMercator(APP_STATE.nuts);
+        if (limiteRegiao) {
+            isobandas.features = isobandas.features
+                .map((feature) => {
+                    let recortada;
+                    try {
+                        recortada = turf.intersect(feature, limiteRegiao);
+                    } catch (erro) {
+                        console.warn("Falha ao recortar isobanda à região; mantida sem recorte:", erro);
+                        return feature;
+                    }
+                    if (!recortada) return null; // sem sobreposição nessa classe
+                    recortada.properties = feature.properties;
+                    return recortada;
+                })
+                .filter((feature) => feature !== null);
+        }
 
         // xmin/xmax/ymin/ymax (e portanto os pontos da grelha) vêm em
         // EPSG:3857 (metros) — o mesmo CRS do próprio Leaflet, por isso

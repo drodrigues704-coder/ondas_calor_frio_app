@@ -101,6 +101,19 @@ function populateNUTSSelect() {
 }
 
 /*=============================================================================
+    OBTÉM A FEATURE GEOJSON DE UMA NUTS (uso por outros módulos)
+=============================================================================*/
+
+/*
+    Devolve a feature GeoJSON (WGS84) da região pedida, ou null se ainda
+    não estiver carregada/não existir. Usada por m7_4_raster.js para
+    recortar as isobandas ao limite exato da região (ver drawRaster()).
+*/
+function getNutsFeature(nutsName) {
+    return nutsData[nutsName] || null;
+}
+
+/*=============================================================================
     DESENHA O LIMITE DA NUTS SELECIONADA NO MAPA
 =============================================================================*/
 
@@ -220,6 +233,7 @@ async function initializeNUTS() {
 =============================================================================*/
 
 window.initializeNUTS = initializeNUTS;
+window.getNutsFeature = getNutsFeature;
 window.drawNUTSBoundary = drawNUTSBoundary;
 window.onNutsChanged = onNUTSSelected; // Mapeia para a chamada do m7_3_controls.js
 
