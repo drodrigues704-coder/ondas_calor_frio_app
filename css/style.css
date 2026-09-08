@@ -291,6 +291,15 @@ select:focus {
     transform: scale(0.98);
 }
 
+/* Visível, mas desativado (app só de visualização) — precisa de ler
+   claramente como "indisponível", não como um botão normal por clicar. */
+#download-button:disabled {
+    background: var(--panel-alt);
+    color: var(--text-muted);
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
 /* ============================================================================
    GRÁFICOS (Chart.js)
 ============================================================================ */

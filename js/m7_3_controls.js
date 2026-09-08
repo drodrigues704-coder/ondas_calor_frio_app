@@ -735,20 +735,19 @@ function attachControlEvents() {
         btn.addEventListener("click", () => onMethodChanged(btn.dataset.method));
     });
 
-    //----------------------------------------------------------
-    // Botão Download — desativado (app só de visualização, por pedido).
-    // Comentado, não apagado: o botão em index.html também está comentado,
-    // por isso "controls.download" já é null e este bloco nunca corria de
-    // qualquer forma — mantido comentado aqui só para tornar a decisão
-    // explícita, em vez de depender implicitamente do elemento em falta.
+    // Botão Download — fica visível (não escondido), mas desativado
+    // (atributo "disabled" em index.html; app só de visualização, por
+    // pedido). Um <button disabled> não dispara "click" no browser, por
+    // isso este registo do listener é inofensivo mesmo assim — mantido
+    // igual ao resto do fluxo normal.
     //----------------------------------------------------------
 
-    // if (controls.download) {
-    //     controls.download.addEventListener(
-    //         "click",
-    //         onDownloadClicked
-    //     );
-    // }
+    if (controls.download) {
+        controls.download.addEventListener(
+            "click",
+            onDownloadClicked
+        );
+    }
 
     updateYearSliderState();
 

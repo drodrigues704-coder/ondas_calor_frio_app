@@ -97,11 +97,8 @@
                             selecionares uma região.</li>
                         <li>Escolhe o tipo de evento, a variável, a estatística e o ano.</li>
                         <li>Clica no mapa para veres a série temporal desse ponto exato.</li>
-                        <!-- Download desativado (app só de visualização) — ver nota
-                             junto ao botão comentado mais abaixo.
-                        <li>Usa "Download GeoTIFF" para descarregar o raster atualmente
-                            representado.</li>
-                        -->
+                        <li>O botão "Download GeoTIFF" está desativado nesta versão —
+                            esta é só uma versão de visualização.</li>
                     </ol>
                 </details>
 
@@ -136,11 +133,12 @@
                 <input type="range" id="year-slider" min="2001" max="2025" value="2001">
                 <div id="year-value">2001</div>
 
-                <!-- App só de visualização, por pedido — download desativado.
-                     Comentado, não apagado, para reativar facilmente se
-                     mudarmos de ideias (ver também m7_3_controls.js).
-                <button id="download-button">📥 Download GeoTIFF</button>
-                -->
+                <!-- App só de visualização, por pedido — botão visível mas
+                     desativado (não escondido), para não parecer que falta
+                     algo. Um <button disabled> não dispara "click" no
+                     browser, por isso nem é preciso alterar o listener em
+                     m7_3_controls.js. -->
+                <button id="download-button" disabled title="Download desativado — esta versão é só de visualização.">📥 Download GeoTIFF</button>
             </section>
         </aside>
 
