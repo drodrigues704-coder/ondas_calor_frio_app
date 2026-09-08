@@ -72,6 +72,10 @@ body {
     border-right: 1px solid var(--border);
     overflow-y: auto;
     overflow-x: hidden;
+    /* Só permite o gesto de scroll vertical — evita que um arrasto
+       ligeiramente diagonal dispare o pinch-zoom/scroll horizontal do
+       browser dentro do painel em ecrãs táteis. */
+    touch-action: pan-y;
 }
 
 #right-panel {
@@ -82,6 +86,7 @@ body {
     border-left: 1px solid var(--border);
     overflow-y: auto;
     overflow-x: hidden;
+    touch-action: pan-y;
 }
 
 /* ============================================================================
@@ -391,6 +396,10 @@ select:focus {
 
 .leaflet-container {
     background: var(--bg);
+    /* O gesto de pinch/arrasto sobre o mapa fica reservado ao Leaflet
+       (pan/zoom do próprio mapa) — nunca aciona o pinch-zoom nativo da
+       página nem o scroll do layout empilhado em mobile. */
+    touch-action: none;
 }
 
 .leaflet-control-zoom {
@@ -453,6 +462,52 @@ select:focus {
 }
 
 /* ============================================================================
+   CONTROLOS FLUTUANTES MOBILE (LEGENDA / ATALHO PARA GRÁFICOS)
+
+   Regra base incondicional (display:none) — TEM de vir antes de
+   qualquer media query que a queira ligar (display:flex), porque a
+   especificidade é igual (um seletor de ID) e em CSS, com
+   especificidade igual, quem decide é a ordem no ficheiro-fonte,
+   independentemente de estar ou não dentro de uma @media. Colocar
+   este bloco depois das media queries fazia-o vencer sempre e
+   anulava o toggle em qualquer ecrã.
+
+   Ambos ocultos por defeito (desktop) — os breakpoints mais abaixo é
+   que os tornam visíveis: #legend-toggle em @media max-width: 768px
+   (mesmo ecrã onde a legenda passa a ser colapsável), #charts-shortcut
+   em @media max-width: 1100px (mesmo ecrã onde o layout passa a
+   empilhado e os gráficos deixam de estar sempre visíveis ao lado do
+   mapa).
+============================================================================ */
+
+#legend-toggle,
+#charts-shortcut {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    position: absolute;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: rgba(18, 22, 29, 0.88);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    color: var(--text);
+    font-size: 18px;
+    text-decoration: none;
+    cursor: pointer;
+    z-index: 1001;
+    /* Acima da legenda (1000) — o botão nunca pode ficar tapado por ela. */
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+#legend-toggle {
+    bottom: 10px;
+    left: 10px;
+}
+
+/* ============================================================================
    RESPONSIVIDADE (MEDIA QUERIES)
 ============================================================================ */
 
@@ -469,10 +524,27 @@ select:focus {
 }
 
 @media (max-width: 1100px) {
+    /* html/body têm "overflow: hidden" fixo fora desta media query — com
+       #app a "height: auto" (para empilhar os painéis em fluxo natural),
+       #app nunca transborda de si próprio, por isso um "overflow-y: auto"
+       nele não produz scrollbar nenhuma: o conteúdo a mais era cortado
+       pelo body sem qualquer forma de o alcançar. É o body (aqui) que
+       passa a ser o contentor scrollável real neste layout empilhado.
+       "scroll-behavior: smooth" tem de estar no elemento que realmente
+       faz scroll — daí ficar aqui e não em #app. */
+    html,
+    body {
+        height: auto;
+        overflow-y: auto;
+        overflow-x: hidden;
+        scroll-behavior: smooth;
+    }
+
     #app {
         flex-direction: column;
-        overflow-y: auto;
-        /* Permite scroll da app inteira se os ecrãs forem muito pequenos */
+        /* Deixa de recortar o próprio conteúdo — quem trata do overflow
+           passou a ser o body, acima. */
+        overflow: visible;
         height: auto;
     }
 
@@ -492,13 +564,65 @@ select:focus {
 
     #right-panel {
         border-top: 1px solid var(--border);
+        /* Evita que o título fique colado ao topo ao saltar via âncora. */
+        scroll-margin-top: 12px;
     }
 
     #map-container {
         width: 100%;
-        height: 500px;
-        /* Garante uma altura fixa confortável para o mapa em tablets/telemóveis */
+        /* Fallback para browsers sem suporte a dvh (a regra seguinte
+           substitui-o quando há suporte). 100dvh = altura real do
+           viewport visível em mobile, sem a barra de endereço do
+           browser a somar/subtrair espaço quando aparece/desaparece —
+           um valor fixo em px fica ora demasiado alto, ora curto. */
+        height: 60vh;
+        height: 60dvh;
+        min-height: 320px;
+        /* Garante uma altura confortável para o mapa em tablets/telemóveis */
         flex: none;
+    }
+
+    /* ------------------------------------------------------------------
+       ALVOS DE TOQUE (~44px) — segmented-control, slider do ano e
+       controlos do Leaflet. Nos tamanhos por defeito (desktop/rato) estes
+       controlos são mais pequenos; em ecrãs empilhados (tablets/telemóveis,
+       tipicamente táteis) precisam de área de toque maior.
+       ------------------------------------------------------------------ */
+
+    .segmented-option {
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* A altura do próprio <input type="range"> aumenta a área de toque à
+       volta do thumb (o browser centra-o verticalmente na caixa) sem
+       alterar o aspeto nativo (accent-color continua a aplicar-se). */
+    #year-slider {
+        height: 44px;
+    }
+
+    #year-slider::-webkit-slider-thumb {
+        width: 26px;
+        height: 26px;
+    }
+
+    #year-slider::-moz-range-thumb {
+        width: 26px;
+        height: 26px;
+    }
+
+    .leaflet-control-zoom a {
+        width: 44px !important;
+        height: 44px !important;
+        line-height: 44px !important;
+        font-size: 20px;
+    }
+
+    .leaflet-control-layers-toggle {
+        width: 44px !important;
+        height: 44px !important;
     }
 }
 
@@ -518,8 +642,55 @@ select:focus {
     #legend {
         width: 220px;
         font-size: 11px;
-        bottom: 10px;
+        /* Sobe para deixar espaço ao #legend-toggle (44px) fixo em baixo. */
+        bottom: 64px;
         left: 10px;
+        max-height: 40vh;
+        overflow-y: auto;
+    }
+
+    /* Legenda colapsável — em ecrãs pequenos não pode ficar sempre a
+       tapar o mapa. Conteúdo continua a ser gerado por updateLegend()
+       (m7_6_ui.js); aqui só se esconde/mostra o contentor. */
+    #legend.collapsed {
+        display: none;
+    }
+
+    #legend-toggle {
+        display: flex;
+    }
+}
+
+/* ============================================================================
+   ORIENTAÇÃO — TELEMÓVEIS EM PAISAGEM
+
+   Em paisagem a altura do viewport é curta; 60dvh para o mapa (definido
+   em @media max-width: 1100px) deixava pouco espaço visível para os
+   painéis. Reduz-se a fração do mapa e a altura dos gráficos só neste
+   caso, sem tocar no essencial dos breakpoints por largura.
+============================================================================ */
+
+@media (max-width: 1100px) and (orientation: landscape) {
+    #map-container {
+        height: 45vh;
+        height: 45dvh;
+        min-height: 260px;
+    }
+
+    #regional-chart,
+    #point-chart {
+        max-height: 160px;
+    }
+}
+
+/* #legend-toggle / #charts-shortcut: regra base (display:none) definida
+   mais acima, antes de "RESPONSIVIDADE (MEDIA QUERIES)" — ver comentário
+   lá. Aqui fica só o override que liga #charts-shortcut. */
+@media (max-width: 1100px) {
+    #charts-shortcut {
+        display: flex;
+        bottom: 10px;
+        right: 10px;
     }
 }
 

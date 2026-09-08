@@ -142,6 +142,50 @@ function showLegendPlaceholder(mensagem) {
 }
 
 /* ============================================================================
+    COLAPSO DA LEGENDA (ECRÃS PEQUENOS)
+
+    Em ecrãs pequenos a legenda fica sobreposta ao mapa (ver #legend em
+    style.css) e não pode ficar sempre visível a tapá-lo. O botão
+    #legend-toggle (index.html) só é visível a partir do breakpoint
+    onde isto se aplica (@media max-width: 768px, style.css) — em ecrã
+    largo esta função nunca é acionada e a legenda mantém-se como
+    sempre esteve.
+============================================================================ */
+
+/*
+    Alterna a visibilidade da legenda, através da classe "collapsed"
+    (só tem efeito visual dentro do breakpoint mobile — ver style.css).
+*/
+function toggleLegend() {
+    if (!UI.legend) return;
+
+    const colapsada = UI.legend.classList.toggle("collapsed");
+
+    const botao = document.getElementById("legend-toggle");
+    if (botao) {
+        botao.setAttribute("aria-expanded", String(!colapsada));
+    }
+}
+
+/*
+    Liga o botão de colapso da legenda. Arranca já colapsada em ecrãs
+    pequenos, para a legenda não tapar o mapa assim que a app carrega;
+    em ecrã largo o botão está oculto (CSS) e isto não tem qualquer
+    efeito visível.
+*/
+function initializeLegendToggle() {
+    const botao = document.getElementById("legend-toggle");
+    if (!botao || !UI.legend) return;
+
+    if (window.matchMedia && window.matchMedia("(max-width: 768px)").matches) {
+        UI.legend.classList.add("collapsed");
+        botao.setAttribute("aria-expanded", "false");
+    }
+
+    botao.addEventListener("click", toggleLegend);
+}
+
+/* ============================================================================
     ORQUESTRAÇÃO DE ATUALIZAÇÃO DA INTERFACE
 ============================================================================ */
 
@@ -163,6 +207,7 @@ function initializeUI() {
     console.log("Inicializando interface de utilizador...");
     updateYearLabel();
     updateLegend();
+    initializeLegendToggle();
 
     showMessage("Aplicação inicializada com sucesso.");
     console.log("✔ UI estruturada e pronta.");
@@ -195,6 +240,8 @@ window.updateInterface = updateInterface;
 window.refreshUI = refreshUI;
 window.updateLegend = updateLegend;
 window.showLegendPlaceholder = showLegendPlaceholder;
+window.toggleLegend = toggleLegend;
+window.initializeLegendToggle = initializeLegendToggle;
 window.updateYearLabel = updateYearLabel;
 window.showMessage = showMessage;
 window.printUIStatus = printUIStatus;

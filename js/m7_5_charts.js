@@ -365,9 +365,24 @@ function initializeCharts() {
     resetCharts();
 }
 
-window.addEventListener("resize", () => {
+/*
+    Redimensiona os gráficos existentes aos novos limites do canvas.
+    Partilhada pelos listeners "resize" e "orientationchange" abaixo —
+    ambos precisam exatamente do mesmo ajuste, só o gatilho é diferente.
+*/
+function handleChartsViewportChange() {
     if (regionalChart) regionalChart.resize();
     if (pointChart) pointChart.resize();
+}
+
+window.addEventListener("resize", handleChartsViewportChange);
+
+// Em telemóveis, "orientationchange" dispara antes de o browser
+// terminar o reflow do layout — ler as dimensões do canvas de imediato
+// dava por vezes o tamanho da orientação anterior. O pequeno atraso
+// garante que o Chart.js já vê as dimensões finais.
+window.addEventListener("orientationchange", () => {
+    setTimeout(handleChartsViewportChange, 200);
 });
 
 /* ============================================================================
@@ -399,6 +414,7 @@ window.clearCharts = clearCharts;
 window.resetCharts = resetCharts;
 window.loadMockCharts = loadMockCharts;
 window.printChartsStatus = printChartsStatus;
+window.handleChartsViewportChange = handleChartsViewportChange;
 
 /* ============================================================================
     MÓDULO CARREGADO

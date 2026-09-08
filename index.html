@@ -147,6 +147,14 @@
             <div id="map"></div>
             <!-- Legenda Dinâmica -->
             <div id="legend"></div>
+            <!-- Colapsa/expande a legenda em ecrãs pequenos, onde não pode
+                 ficar sempre sobre o mapa (ver m7_6_ui.js / style.css). -->
+            <button id="legend-toggle" type="button" aria-expanded="true" aria-controls="legend"
+                aria-label="Mostrar/ocultar legenda" title="Mostrar/ocultar legenda">📊</button>
+            <!-- Atalho para os gráficos no layout empilhado (mobile), para
+                 evitar scroll longo até ao painel direito. -->
+            <a id="charts-shortcut" href="#right-panel" aria-label="Ver gráficos"
+                title="Ver gráficos">📈</a>
         </main>
 
         <!-- Painel direito -->
