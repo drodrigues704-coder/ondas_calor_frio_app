@@ -736,15 +736,19 @@ function attachControlEvents() {
     });
 
     //----------------------------------------------------------
-    // Botão Download
+    // Botão Download — desativado (app só de visualização, por pedido).
+    // Comentado, não apagado: o botão em index.html também está comentado,
+    // por isso "controls.download" já é null e este bloco nunca corria de
+    // qualquer forma — mantido comentado aqui só para tornar a decisão
+    // explícita, em vez de depender implicitamente do elemento em falta.
     //----------------------------------------------------------
 
-    if (controls.download) {
-        controls.download.addEventListener(
-            "click",
-            onDownloadClicked
-        );
-    }
+    // if (controls.download) {
+    //     controls.download.addEventListener(
+    //         "click",
+    //         onDownloadClicked
+    //     );
+    // }
 
     updateYearSliderState();
 

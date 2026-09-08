@@ -86,8 +86,8 @@
                         mais clara, o mapa aplica uma suavização visual (interpolação
                         cúbica, o método padrão para superfícies contínuas como
                         temperatura ou duração) antes de desenhar as isobandas — isto não
-                        acrescenta informação real. O download do GeoTIFF e as séries
-                        temporais usam sempre os valores da grelha nativa, sem suavização.
+                        acrescenta informação real. As séries temporais usam sempre os
+                        valores da grelha nativa, sem suavização.
                     </p>
 
                     <h3>Como usar</h3>
@@ -97,8 +97,11 @@
                             selecionares uma região.</li>
                         <li>Escolhe o tipo de evento, a variável, a estatística e o ano.</li>
                         <li>Clica no mapa para veres a série temporal desse ponto exato.</li>
+                        <!-- Download desativado (app só de visualização) — ver nota
+                             junto ao botão comentado mais abaixo.
                         <li>Usa "Download GeoTIFF" para descarregar o raster atualmente
                             representado.</li>
+                        -->
                     </ol>
                 </details>
 
@@ -133,7 +136,11 @@
                 <input type="range" id="year-slider" min="2001" max="2025" value="2001">
                 <div id="year-value">2001</div>
 
+                <!-- App só de visualização, por pedido — download desativado.
+                     Comentado, não apagado, para reativar facilmente se
+                     mudarmos de ideias (ver também m7_3_controls.js).
                 <button id="download-button">📥 Download GeoTIFF</button>
+                -->
             </section>
         </aside>
 
