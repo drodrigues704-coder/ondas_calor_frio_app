@@ -386,46 +386,6 @@ function getCurrentZoom() {
 }
 
 /*=============================================================================
-    LEGENDA
-=============================================================================*/
-
-/*
-    Limpa a legenda.
-*/
-
-function clearLegend() {
-
-    const legend = document.getElementById("legend");
-
-    if (!legend) {
-
-        return;
-
-    }
-
-    legend.innerHTML = "";
-
-}
-
-/*
-    Escreve conteúdo HTML na legenda.
-*/
-
-function updateLegend(html) {
-
-    const legend = document.getElementById("legend");
-
-    if (!legend) {
-
-        return;
-
-    }
-
-    legend.innerHTML = html;
-
-}
-
-/*=============================================================================
     EVENTOS DO MAPA
 =============================================================================*/
 

@@ -832,31 +832,6 @@ function getCurrentPalette() {
 }
 
 /* =============================================================================
-    LEGENDA
-============================================================================= */
-
-function updateLegend() {
-    const legend = document.getElementById("legend");
-    if (!legend) {
-        return;
-    }
-
-    // Procura variáveis com segurança contra erros de inicialização precoce
-    const variable = (typeof getCurrentVariable === 'function') ? getCurrentVariable() : { label: "Variável" };
-    const event = (typeof getCurrentEvent === 'function') ? getCurrentEvent() : { label: "Evento" };
-
-    legend.innerHTML = `
-        <strong>${event.label || "Evento"}</strong><br>
-        ${variable.label || "Variável"}<br><br>
-        <small>
-            Mín: ${rasterMinimum.toFixed(2)}
-            <br>
-            Máx: ${rasterMaximum.toFixed(2)}
-        </small>
-    `;
-}
-
-/* =============================================================================
     SÉRIE TEMPORAL DO PONTO (clique no mapa)
 ============================================================================= */
 
@@ -1061,7 +1036,6 @@ window.loadRasterComURL = loadRasterComURL;
 window.drawRaster = drawRaster;
 window.refreshRaster = refreshRaster;
 window.updateRaster = updateRaster;
-window.updateLegend = updateLegend;
 window.printRasterState = printRasterState;
 
 /* =============================================================================
