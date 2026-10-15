@@ -37,6 +37,21 @@ let currentDatasetURL = null;
 */
 let rasterLoading = false;
 
+/*
+    Pedido recebido enquanto outro raster carregava (ex.: slider arrastado
+    depressa). Em vez de ser descartado — o que deixava o mapa no ano
+    anterior —, é repetido quando o carregamento atual termina.
+*/
+let refreshPendente = false;
+
+/*
+    Código HTTP da última falha a descarregar um GeoTIFF (null se correu
+    bem). Um 404 quer dizer que a camada não existe — ex.: OMM / Frio /
+    intensidade_max / 2002, um ano sem eventos. Só há um carregamento de
+    cada vez (rasterLoading), por isso este estado não é partilhado.
+*/
+let ultimoStatusRaster = null;
+
 /* =============================================================================
     DIAGNÓSTICO
 ============================================================================= */
@@ -216,9 +231,12 @@ async function loadRasterComURL(rasterURL) {
     console.log("Download do GeoTIFF:");
     console.log(rasterURL);
 
+    ultimoStatusRaster = null;
+
     try {
         const response = await fetch(rasterURL);
         if (!response.ok) {
+            ultimoStatusRaster = response.status;
             throw new Error(`Erro HTTP ${response.status}`);
         }
 
@@ -419,6 +437,103 @@ function getNutsBoundaryMercator(nutsName) {
 }
 
 /* =============================================================================
+    ESTRUTURA DAS ISOBANDAS (antes do recorte à região)
+============================================================================= */
+
+/*
+    O turf.isobands() devolve cada banda como uma lista de anéis que só
+    está certa com a regra "evenodd" (a que o canvas do Leaflet usa): anéis
+    dentro de anéis, sem distinguir exterior de buraco. O turf.intersect()
+    assume polígonos bem formados (1.º anel exterior, restantes buracos) e,
+    com estes anéis, deitava fora pedaços de área — eram os "buracos sem
+    dados" que apareciam no mapa, em qualquer região.
+
+    Os anéis de uma banda nunca se cruzam, só se encaixam, por isso a
+    profundidade de cada anel (quantos anéis o contêm) define o seu papel:
+    par → exterior, ímpar → buraco do anel que o contém diretamente.
+*/
+function estruturarAneis(feature) {
+    const g = feature.geometry;
+    if (!g) return null;
+
+    const aneis = (g.type === "Polygon" ? g.coordinates
+        : g.type === "MultiPolygon" ? g.coordinates.flat()
+        : []).filter((anel) => anel.length >= 4);
+    if (!aneis.length) return null;
+
+    const caixas = aneis.map((anel) => {
+        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+        for (const [x, y] of anel) {
+            if (x < x0) x0 = x;
+            if (x > x1) x1 = x;
+            if (y < y0) y0 = y;
+            if (y > y1) y1 = y;
+        }
+        return [x0, y0, x1, y1];
+    });
+
+    const areas = aneis.map((anel) => {
+        let soma = 0;
+        for (let i = 0, j = anel.length - 1; i < anel.length; j = i++) {
+            soma += (anel[j][0] + anel[i][0]) * (anel[j][1] - anel[i][1]);
+        }
+        return Math.abs(soma / 2);
+    });
+
+    const pontoNoAnel = (x, y, anel) => {
+        let dentro = false;
+        for (let i = 0, j = anel.length - 1; i < anel.length; j = i++) {
+            const [xi, yi] = anel[i];
+            const [xj, yj] = anel[j];
+            if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) {
+                dentro = !dentro;
+            }
+        }
+        return dentro;
+    };
+
+    // O anel i está dentro do anel j? Decide pela maioria de alguns
+    // vértices, para não falhar quando dois anéis se tocam num ponto de sela.
+    const contido = (i, j) => {
+        const [a0, b0, a1, b1] = caixas[i];
+        const [c0, d0, c1, d1] = caixas[j];
+        if (a0 < c0 || b0 < d0 || a1 > c1 || b1 > d1 || areas[i] >= areas[j]) return false;
+
+        const anel = aneis[i];
+        const passo = Math.max(1, Math.floor(anel.length / 5));
+        let sim = 0, total = 0;
+        for (let k = 0; k < anel.length - 1; k += passo) {
+            total++;
+            if (pontoNoAnel(anel[k][0], anel[k][1], aneis[j])) sim++;
+        }
+        return sim * 2 > total;
+    };
+
+    const contentores = aneis.map((_, i) =>
+        aneis.map((_, j) => j).filter((j) => j !== i && contido(i, j))
+    );
+    const profundidade = contentores.map((lista) => lista.length);
+
+    const poligonos = new Map();
+    aneis.forEach((anel, i) => {
+        if (profundidade[i] % 2 === 0) poligonos.set(i, [anel]);
+    });
+    aneis.forEach((anel, i) => {
+        if (profundidade[i] % 2 === 0) return;
+        const pai = contentores[i]
+            .filter((j) => profundidade[j] === profundidade[i] - 1)
+            .sort((a, b) => areas[a] - areas[b])[0];
+        if (pai !== undefined) {
+            poligonos.get(pai).push(anel);
+        } else {
+            console.warn("estruturarAneis(): buraco sem anel exterior — descartado.");
+        }
+    });
+
+    return turf.multiPolygon([...poligonos.values()], feature.properties);
+}
+
+/* =============================================================================
     CRIAÇÃO DO LAYER LEAFLET
 ============================================================================= */
 
@@ -533,7 +648,9 @@ async function drawRaster() {
                 .map((feature) => {
                     let recortada;
                     try {
-                        recortada = turf.intersect(feature, limiteRegiao);
+                        const estruturada = estruturarAneis(feature);
+                        if (!estruturada) return null;
+                        recortada = turf.intersect(estruturada, limiteRegiao);
                     } catch (erro) {
                         console.warn("Falha ao recortar isobanda à região; mantida sem recorte:", erro);
                         return feature;
@@ -649,10 +766,16 @@ async function drawRaster() {
 /* Guardamos a última NUTS que foi realmente desenhada para saber se mudou */
 let lastLoadedNuts = null;
 
+/*
+    Devolve "em_falta" (404: não existe camada para a seleção atual),
+    "erro" (outra falha a carregar), "obsoleto" (pedido adiado porque
+    outro raster está a carregar) ou null nos restantes casos.
+*/
 async function refreshRaster() {
     if (rasterLoading) {
-        console.warn("Já existe um raster a carregar.");
-        return;
+        console.warn("Já existe um raster a carregar — pedido adiado.");
+        refreshPendente = true;
+        return "obsoleto";
     }
 
     const novoDatasetURL = await getCurrentDatasetURL();
@@ -701,9 +824,11 @@ async function refreshRaster() {
 
         if (!georaster) {
             console.warn("O raster não foi carregado.");
-            currentDatasetURL = null;
+            // Sem isto a legenda e o estado continuavam no ano anterior
+            // com o slider já no ano sem dados.
+            clearRaster();
             lastLoadedNuts = null;
-            return;
+            return ultimoStatusRaster === 404 ? "em_falta" : "erro";
         }
 
         await drawRaster();
@@ -718,6 +843,11 @@ async function refreshRaster() {
     }
     finally {
         rasterLoading = false;
+
+        if (refreshPendente) {
+            refreshPendente = false;
+            updateRaster();
+        }
     }
 }
 
@@ -745,8 +875,18 @@ async function updateRaster() {
         return;
     }
 
-    await refreshRaster();
-    updateLegend();
+    const falha = await refreshRaster();
+
+    if (falha === "em_falta") {
+        showLegendPlaceholder("Não existe camada para esta seleção (por exemplo, um ano sem eventos).");
+    }
+    else if (falha === "erro") {
+        showLegendPlaceholder("Não foi possível carregar os dados.");
+    }
+    // "obsoleto": a legenda fica a cargo do pedido da seleção atual
+    else if (falha !== "obsoleto") {
+        updateLegend();
+    }
 
     // Mantém as duas Séries Temporais (regional e do ponto) sempre
     // coerentes com o evento/variável/metodologia/região atuais.
@@ -851,6 +991,12 @@ let pontoSelecionado = null;
 const pixelSeriesCache = {};
 
 /*
+    Identifica o último pedido de série do ponto (seleção + ponto), para
+    ignorar a resposta de um pedido que entretanto foi substituído.
+*/
+let seriePontoPedido = null;
+
+/*
     Devolve a lista de anos configurados (CONFIG.START_YEAR..END_YEAR).
 */
 function anosDisponiveis() {
@@ -900,9 +1046,17 @@ async function updatePointTimeSeries(lat, lng) {
     const variavel = APP_STATE.variavel;
     const anos = anosDisponiveis();
 
+    const pedido = `${metodo}|${evento}|${variavel}|${lat}|${lng}`;
+    seriePontoPedido = pedido;
+
     try {
         const valores = await Promise.all(anos.map(async (ano) => {
             const chave = `${metodo}|${evento}|${variavel}|${ano}`;
+
+            // null em cache = ano sem camada (404), não voltar a pedir
+            if (chave in pixelSeriesCache && pixelSeriesCache[chave] === null) {
+                return null;
+            }
             let georaster = pixelSeriesCache[chave];
 
             if (!georaster) {
@@ -910,6 +1064,9 @@ async function updatePointTimeSeries(lat, lng) {
                 try {
                     const response = await fetch(path);
                     if (!response.ok) {
+                        if (response.status === 404) {
+                            pixelSeriesCache[chave] = null;
+                        }
                         return null;
                     }
                     const arrayBuffer = await response.arrayBuffer();
@@ -926,6 +1083,12 @@ async function updatePointTimeSeries(lat, lng) {
         }));
 
         console.log("Série temporal do ponto:", valores);
+
+        // Entretanto foi pedida outra série (outro ponto ou seleção): o
+        // Promise.all antigo pode terminar depois do novo — ignorar.
+        if (seriePontoPedido !== pedido) {
+            return;
+        }
 
         if (typeof updatePointChart === "function") {
             updatePointChart(anos, valores);
@@ -976,6 +1139,27 @@ async function refreshPointTimeSeries() {
     na preparação do deploy. Carregada uma vez a partir de
     data/stats_series.json e mantida em cache.
 */
+/*
+    Converte a série devolvida pela API nos eixos do gráfico, com todos os
+    anos de CONFIG.START_YEAR a CONFIG.END_YEAR. A tabela pré-calculada só tem os anos
+    que existem no catálogo; um ano sem camada (ex.: OMM / Frio /
+    intensidade_max / 2002, um ano sem eventos) fica a null, para o gráfico
+    mostrar uma falha em vez de ligar os anos vizinhos — nunca 0, porque a
+    intensidade de um ano sem eventos não existe.
+*/
+function serieParaGrafico(serie) {
+    const valorPorAno = new Map(serie.map((item) => [item.ano, item.value]));
+    const labels = [];
+    const valores = [];
+
+    for (let ano = CONFIG.START_YEAR; ano <= CONFIG.END_YEAR; ano++) {
+        labels.push(ano);
+        valores.push(valorPorAno.has(ano) ? valorPorAno.get(ano) : null);
+    }
+
+    return { labels, valores };
+}
+
 let statsSeriesTable = null;
 
 async function loadStatsSeriesTable() {
@@ -1008,8 +1192,7 @@ async function refreshRegionalTimeSeries() {
 
         console.log("Série temporal regional:", serie);
 
-        const labels = serie.map((item) => item.ano);
-        const valores = serie.map((item) => item.value);
+        const { labels, valores } = serieParaGrafico(serie);
 
         if (typeof updateRegionalChart === "function") {
             updateRegionalChart(labels, valores);

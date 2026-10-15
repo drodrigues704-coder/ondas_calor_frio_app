@@ -57,7 +57,7 @@
         <aside id="left-panel">
             <section class="panel-content">
                 <h1>🌍 Monitorização de Ondas de Calor e Frio</h1>
-                <p class="subtitle">CERRA · Portugal Continental · 2001–2025</p>
+                <p class="subtitle">CERRA · Portugal Continental · 1991–2025</p>
 
                 <details id="about-panel">
                     <summary>ℹ️ Sobre a aplicação</summary>
@@ -65,19 +65,26 @@
                     <h3>O que é</h3>
                     <p>
                         Visualização de indicadores climáticos relacionados com ondas de
-                        calor e ondas de frio em Portugal Continental, entre 2001 e 2025,
+                        calor e ondas de frio em Portugal Continental, entre 1991 e 2025,
                         a partir dos dados de reanálise CERRA (Copernicus).
                     </p>
 
                     <h3>Metodologias</h3>
                     <p>
-                        <strong>OMM</strong> — deteção baseada em limiares fixos, definidos
-                        segundo a metodologia da Organização Meteorológica Mundial.
+                        <strong>OMM</strong> — considera-se onda de calor (frio) um período
+                        de pelo menos 6 dias consecutivos em que a temperatura máxima
+                        (mínima) fica mais de 5 °C acima (abaixo) do valor normal para esse
+                        dia do ano, segundo o critério da Organização Meteorológica Mundial.
                     </p>
                     <p>
-                        <strong>Percentis</strong> — deteção baseada em limiares por
-                        percentil (P90 para calor, P10 para frio), calculados a partir da
-                        climatologia local de cada célula.
+                        <strong>Percentis</strong> — considera-se onda de calor (frio) um
+                        período de pelo menos 6 dias consecutivos em que a temperatura
+                        máxima (mínima) ultrapassa o percentil 90 (fica abaixo do percentil
+                        10) da climatologia local de cada célula para esse dia do ano.
+                    </p>
+                    <p>
+                        Os valores normais são calculados para o período de referência
+                        1991–2020; os indicadores cobrem a série 1991–2025.
                     </p>
 
                     <h3>Representação no mapa</h3>
@@ -130,8 +137,8 @@
                 <select id="stat-select"></select>
 
                 <label for="year-slider">Ano</label>
-                <input type="range" id="year-slider" min="2001" max="2025" value="2001">
-                <div id="year-value">2001</div>
+                <input type="range" id="year-slider" min="1991" max="2025" value="1991">
+                <div id="year-value">1991</div>
 
                 <!-- App só de visualização, por pedido — botão visível mas
                      desativado (não escondido), para não parecer que falta

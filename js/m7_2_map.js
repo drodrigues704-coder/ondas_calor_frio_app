@@ -95,14 +95,15 @@ function initializeMap() {
         }
     );
 
-    // Basemap claro (CARTO Positron) — alternativa clara e minimalista,
-    // igualmente preferida na comparação.
-    const positronLayer = L.tileLayer(
-        "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+    // Basemap claro (Esri World Light Gray, gratuito, sem chave de API) —
+    // par claro do basemap escuro acima. Substitui o CARTO Positron, que
+    // em outubro de 2026 passou a exigir chave de API (todas as tiles
+    // vinham com "API KEY REQUIRED").
+    const lightLayer = L.tileLayer(
+        "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",
         {
-            maxZoom: 19,
-            subdomains: "abcd",
-            attribution: "&copy; OpenStreetMap contributors &copy; CARTO"
+            maxZoom: 16,
+            attribution: "Tiles &copy; Esri — Source: Esri"
         }
     );
 
@@ -132,7 +133,7 @@ function initializeMap() {
     L.control.layers(
         {
             "Escuro": darkLayer,
-            "Claro": positronLayer,
+            "Claro": lightLayer,
             "Rua": streetLayer,
             "Híbrido": hybridLayer
         },
