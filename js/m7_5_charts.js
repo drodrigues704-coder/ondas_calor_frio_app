@@ -128,6 +128,64 @@ function resetCharts() {
 }
 
 /* ============================================================================
+    ANOS "SEM ONDAS" (INTENSIDADE MÁXIMA)
+============================================================================ */
+
+/*
+    Na intensidade máxima, um ano sem valor é um ano sem ondas (a
+    intensidade não existe, não é zero): em vez de uma falha sem
+    explicação, marca-se esse ano na base do gráfico, na cor "Sem ondas".
+    Uma série toda vazia (ex.: clique sobre a água) é "sem dados", não
+    "sem ondas" — não leva marcas.
+*/
+function marcasSemOndas(values) {
+    const variavel = (typeof getCurrentVariable === "function") ? getCurrentVariable() : null;
+    const temValores = values.some((v) => v !== null && v !== undefined);
+
+    if (!variavel?.semOndasSemValor || !temValores) {
+        return values.map(() => null);
+    }
+
+    // 0.04 no eixo próprio (0–1, invisível): logo acima da base.
+    return values.map((v) => (v === null || v === undefined) ? 0.04 : null);
+}
+
+function datasetSemOndas(values) {
+    return {
+        label: "Sem ondas",
+        data: marcasSemOndas(values),
+        yAxisID: "semOndas",
+        showLine: false,
+        fill: false,
+        clip: false, // a marca fica junto à base: não a cortar em gráficos baixos
+        pointStyle: "rectRot",
+        pointRadius: 5,
+        pointHoverRadius: 7,
+        borderColor: CONFIG.COR_SEM_ONDAS,
+        backgroundColor: CONFIG.COR_SEM_ONDAS
+    };
+}
+
+/*
+    Opções partilhadas pelos dois gráficos para as marcas "Sem ondas":
+    eixo próprio (não mexe na escala dos valores), legenda só quando há
+    marcas, e tooltip "Sem ondas" em vez do valor fictício da marca.
+*/
+const ESCALA_SEM_ONDAS = { axis: "y", display: false, min: 0, max: 1 };
+
+function filtrarLegendaSemOndas(item, data) {
+    const dataset = data.datasets[item.datasetIndex];
+    return dataset.yAxisID !== "semOndas" || dataset.data.some((v) => v !== null);
+}
+
+function rotuloTooltip(contexto) {
+    if (contexto.dataset.yAxisID === "semOndas") {
+        return "Sem ondas";
+    }
+    return `${contexto.dataset.label}: ${contexto.formattedValue}`;
+}
+
+/* ============================================================================
     CRIAÇÃO DOS GRÁFICOS (CHART.JS)
 ============================================================================ */
 
@@ -163,7 +221,8 @@ function createRegionalChart(labels, values) {
                     pointRadius: 3,
                     pointHoverRadius: 6,
                     tension: 0.4
-                }
+                },
+                datasetSemOndas(values)
             ]
         },
         options: {
@@ -176,7 +235,10 @@ function createRegionalChart(labels, values) {
             plugins: {
                 legend: {
                     display: true,
-                    labels: { color: "#c5cbd6" }
+                    labels: { color: "#c5cbd6", filter: filtrarLegendaSemOndas }
+                },
+                tooltip: {
+                    callbacks: { label: rotuloTooltip }
                 },
                 title: {
                     display: true,
@@ -203,7 +265,8 @@ function createRegionalChart(labels, values) {
                     },
                     ticks: { color: "#8b95a5" },
                     grid: { color: "rgba(255, 255, 255, 0.08)" }
-                }
+                },
+                semOndas: ESCALA_SEM_ONDAS
             }
         }
     });
@@ -241,7 +304,8 @@ function createPointChart(labels, values) {
                     pointRadius: 4,
                     pointHoverRadius: 7,
                     tension: 0.4
-                }
+                },
+                datasetSemOndas(values)
             ]
         },
         options: {
@@ -254,7 +318,10 @@ function createPointChart(labels, values) {
             plugins: {
                 legend: {
                     display: true,
-                    labels: { color: "#c5cbd6" }
+                    labels: { color: "#c5cbd6", filter: filtrarLegendaSemOndas }
+                },
+                tooltip: {
+                    callbacks: { label: rotuloTooltip }
                 },
                 title: {
                     display: true,
@@ -281,7 +348,8 @@ function createPointChart(labels, values) {
                     },
                     ticks: { color: "#8b95a5" },
                     grid: { color: "rgba(255, 255, 255, 0.08)" }
-                }
+                },
+                semOndas: ESCALA_SEM_ONDAS
             }
         }
     });
@@ -302,6 +370,7 @@ function updateRegionalChart(labels, values) {
     regionalChart.data.datasets[0].data = values;
     regionalChart.data.datasets[0].borderColor = colors.border;
     regionalChart.data.datasets[0].backgroundColor = colors.background;
+    regionalChart.data.datasets[1].data = marcasSemOndas(values);
     regionalChart.options.scales.y.title.text = getActiveUnit();
     regionalChart.update();
 }
@@ -317,6 +386,7 @@ function updatePointChart(labels, values) {
     pointChart.data.datasets[0].data = values;
     pointChart.data.datasets[0].borderColor = colors.border;
     pointChart.data.datasets[0].backgroundColor = colors.background;
+    pointChart.data.datasets[1].data = marcasSemOndas(values);
     pointChart.options.scales.y.title.text = getActiveUnit();
     pointChart.update();
 }
