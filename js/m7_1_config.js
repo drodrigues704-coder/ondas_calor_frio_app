@@ -49,6 +49,15 @@ const CONFIG = Object.freeze({
     STRETCH_MAX: 98,
 
     //----------------------------------------------------------------------
+    // Cor neutra (cinzento-esverdeado: nenhuma das paletas tem verdes,
+    // e um cinzento confundia-se com a classe mais baixa da paleta de
+    // frio, branca) das zonas da região sem valor — na intensidade máxima,
+    // as células sem ondas (a intensidade não existe, não é zero)
+    //----------------------------------------------------------------------
+
+    COR_SEM_ONDAS: "#8a9a7b",
+
+    //----------------------------------------------------------------------
     // Mapa
     //----------------------------------------------------------------------
 
@@ -257,7 +266,11 @@ const VARIAVEIS = Object.freeze({
 
         label: "Intensidade Máxima",
 
-        unidade: "°C"
+        unidade: "°C",
+
+        // Sem eventos não há intensidade (NaN, não 0): a legenda mostra
+        // a cor neutra CONFIG.COR_SEM_ONDAS como "Sem ondas".
+        semOndasSemValor: true
 
     }),
 
@@ -324,8 +337,10 @@ const ESTATISTICAS = Object.freeze([
     progressão de cores original (primeira e última cor mantidas).
 */
 function sampleColors(palette, n) {
+    // Uma classe só (valor inteiro constante, ex.: 0 eventos em toda a
+    // região): a primeira cor, para "nenhum evento" não sair no extremo.
     if (n <= 1) {
-        return [palette[palette.length - 1]];
+        return [palette[0]];
     }
 
     const amostra = [];
@@ -347,13 +362,42 @@ function sampleColors(palette, n) {
     - Restantes casos usam um número moderado de classes contínuas.
 */
 function calcularClasses(min, max, ehInteiro) {
-    const amplitude = max - min;
-
-    if (ehInteiro && amplitude <= 10) {
-        return Math.max(1, Math.round(amplitude) + 1);
+    if (classePorValor(min, max, ehInteiro)) {
+        return Math.max(1, Math.round(max - min) + 1);
     }
 
-    return Math.min(6, Math.max(3, Math.round(amplitude) + 1));
+    return Math.min(6, Math.max(3, Math.round(max - min) + 1));
+}
+
+/*
+    Variável inteira com poucos valores distintos: uma classe por valor.
+*/
+function classePorValor(min, max, ehInteiro) {
+    return ehInteiro && (max - min) <= 10;
+}
+
+/*
+    Limiares (n+1) das n classes — usados pelo mapa (m7_4_raster.js) e
+    pela legenda (m7_6_ui.js), para nunca divergirem.
+
+    Com uma classe por valor, cada classe fica centrada no seu valor
+    (k-0.5 a k+0.5). Antes os limiares dividiam min..max em n partes
+    iguais (0, 0.875, 1.75… para 0–7): as classes não correspondiam a
+    valores e os rótulos arredondados repetiam-se ("4 4").
+*/
+function calcularLimites(min, max, ehInteiro) {
+    const n = calcularClasses(min, max, ehInteiro);
+    const limites = [];
+
+    for (let i = 0; i <= n; i++) {
+        limites.push(
+            classePorValor(min, max, ehInteiro)
+                ? min - 0.5 + i
+                : min + (max - min) * (i / n)
+        );
+    }
+
+    return limites;
 }
 
 /* =============================================================================
@@ -538,6 +582,8 @@ window.ESTATISTICAS = ESTATISTICAS;
 window.sampleColors = sampleColors;
 
 window.calcularClasses = calcularClasses;
+window.calcularLimites = calcularLimites;
+window.classePorValor = classePorValor;
 
 window.isAnnualMode = isAnnualMode;
 

@@ -45,6 +45,12 @@ let rasterLoading = false;
 let refreshPendente = false;
 
 /*
+    Máscara de terra da seleção atual (georaster de numero_eventos), só
+    carregada para variáveis com "Sem ondas" (ver carregarMascaraTerra).
+*/
+let currentMascaraTerra = null;
+
+/*
     Código HTTP da última falha a descarregar um GeoTIFF (null se correu
     bem). Um 404 quer dizer que a camada não existe — ex.: OMM / Frio /
     intensidade_max / 2002, um ano sem eventos. Só há um carregamento de
@@ -106,6 +112,7 @@ function removeRasterLayer() {
 function clearRaster() {
     removeRasterLayer();
     currentRaster = null;
+    currentMascaraTerra = null;
     currentDatasetURL = null;
     APP_STATE.raster = null;
     APP_STATE.rasterLayer = null;
@@ -150,14 +157,14 @@ async function loadNutsSlugs() {
     Constrói o caminho relativo (estático) do COG pretendido pela seleção
     atual. Devolve null se a NUTS ativa ainda não tiver slug conhecido.
 */
-function buildDatasetURL() {
+function buildDatasetURL(variavel = APP_STATE.variavel) {
     const anual = APP_STATE.estatistica === "ano";
     const periodo = anual ? String(APP_STATE.ano) : APP_STATE.estatistica;
 
     if (!APP_STATE.nuts) {
         return anual
-            ? `data/cog/${APP_STATE.metodo}/${APP_STATE.evento}/${periodo}/${APP_STATE.variavel}.tif`
-            : `data/cog_clim/${APP_STATE.metodo}/${APP_STATE.evento}/${APP_STATE.variavel}_${periodo}.tif`;
+            ? `data/cog/${APP_STATE.metodo}/${APP_STATE.evento}/${periodo}/${variavel}.tif`
+            : `data/cog_clim/${APP_STATE.metodo}/${APP_STATE.evento}/${variavel}_${periodo}.tif`;
     }
 
     if (!nutsSlugs || !(APP_STATE.nuts in nutsSlugs)) {
@@ -166,8 +173,34 @@ function buildDatasetURL() {
     const slug = nutsSlugs[APP_STATE.nuts];
 
     return anual
-        ? `data/cog_nuts/${slug}/${APP_STATE.metodo}/${APP_STATE.evento}/${periodo}/${APP_STATE.variavel}.tif`
-        : `data/cog_clim_nuts/${slug}/${APP_STATE.metodo}/${APP_STATE.evento}/${APP_STATE.variavel}_${periodo}.tif`;
+        ? `data/cog_nuts/${slug}/${APP_STATE.metodo}/${APP_STATE.evento}/${periodo}/${variavel}.tif`
+        : `data/cog_clim_nuts/${slug}/${APP_STATE.metodo}/${APP_STATE.evento}/${variavel}_${periodo}.tif`;
+}
+
+/*
+    Na intensidade máxima, uma célula sem valor pode ser terra sem ondas
+    OU fora de terra (mar, Espanha, água excluída no pipeline). O
+    numero_eventos da mesma seleção (ano/estatística e região) distingue
+    os dois: só é NaN fora de terra. Devolve o georaster, ou null se
+    falhar — nesse caso não se desenha a cor "Sem ondas".
+*/
+async function carregarMascaraTerra() {
+    const path = buildDatasetURL("numero_eventos");
+    if (!path) {
+        return null;
+    }
+
+    try {
+        const response = await fetch(path);
+        if (!response.ok) {
+            return null;
+        }
+        return await parseGeoraster(await response.arrayBuffer());
+    }
+    catch (erro) {
+        console.warn("Máscara de terra não carregada:", erro);
+        return null;
+    }
 }
 
 /* =============================================================================
@@ -585,12 +618,21 @@ async function drawRaster() {
         const n = calcularClasses(rasterMinimum, rasterMaximum, rasterIsInteger);
         const cores = sampleColors(palette, n);
 
-        // n classes ⇒ n+1 limiares (breaks), igual à classificação usada
-        // na legenda.
-        const breaks = [];
-        for (let i = 0; i <= n; i++) {
-            breaks.push(rasterMinimum + (rasterMaximum - rasterMinimum) * (i / n));
-        }
+        // n classes ⇒ n+1 limiares (breaks), os mesmos da legenda.
+        const breaks = calcularLimites(rasterMinimum, rasterMaximum, rasterIsInteger);
+
+        const limiteRegiao = getNutsBoundaryMercator(APP_STATE.nuts);
+
+        // Na intensidade máxima, as células de terra sem valor são as que
+        // não tiveram ondas: ganham uma banda própria, na cor neutra
+        // CONFIG.COR_SEM_ONDAS. A máscara de terra (mesma grelha) separa-as
+        // das células fora de terra, que continuam sem cor.
+        const mascara = currentMascaraTerra;
+        const mostrarSemOndas = !!getCurrentVariable()?.semOndasSemValor
+            && !!limiteRegiao
+            && !!mascara
+            && mascara.width === largura
+            && mascara.height === altura;
 
         const fina = reamostrarBicubica(
             currentRaster.values[0],
@@ -634,6 +676,49 @@ async function drawRaster() {
             feature.properties.corIndice = Math.min(indice, cores.length - 1);
         });
 
+        // "Sem ondas": área de terra sem valor, numa passagem própria e
+        // desenhada por baixo das classes (corIndice -1). Calculada à parte
+        // — e não como uma banda abaixo do 1.º limiar — para a transição
+        // dados → água não atravessar a cor neutra (contorno à volta dos
+        // estuários). Campo 1 = terra sem valor, 0 = resto; a máscara de
+        // terra é reamostrada como os dados e cortada a 0.5, para o limite
+        // terra/água ficar suave em vez de em blocos 4×4.
+        if (mostrarSemOndas) {
+            const terraFina = reamostrarBicubica(
+                mascara.values[0].map((l) => Array.from(l, (v) => (Number.isFinite(v) ? 1 : 0))),
+                largura,
+                altura,
+                RESAMPLE_FACTOR,
+                0,
+                1
+            ).banda;
+
+            const pontosSemOndas = [];
+            for (let linha = 0; linha < fina.altura; linha++) {
+                for (let coluna = 0; coluna < fina.largura; coluna++) {
+                    const valor = fina.banda[linha][coluna];
+                    const semValor = valor === null || valor === undefined || isNaN(valor);
+                    pontosSemOndas.push(turf.point(
+                        [
+                            currentRaster.xmin + (coluna + 0.5) * novoPixelWidth,
+                            currentRaster.ymax - (linha + 0.5) * novoPixelHeight
+                        ],
+                        { valor: (semValor && terraFina[linha][coluna] >= 0.5) ? 1 : 0 }
+                    ));
+                }
+            }
+
+            const semOndas = turf.isobands(
+                turf.featureCollection(pontosSemOndas),
+                [0.5, 1.5],
+                { zProperty: "valor" }
+            );
+            semOndas.features.forEach((feature) => {
+                feature.properties = { corIndice: -1 };
+            });
+            isobandas.features.unshift(...semOndas.features);
+        }
+
         // Recorta cada isobanda ao limite EXATO da região (vetor↔vetor),
         // em vez de confiar no recorte que os ficheiros pré-gerados já
         // têm — esse segue a grelha CERRA (~5.5 km, em "escada") e a
@@ -642,7 +727,6 @@ async function drawRaster() {
         // isobandas podiam ultrapassar visivelmente a fronteira real da
         // NUTS. Mesma técnica validada noutro projeto (SPI_SPEI, com
         // geopandas.clip em vez de turf.intersect).
-        const limiteRegiao = getNutsBoundaryMercator(APP_STATE.nuts);
         if (limiteRegiao) {
             isobandas.features = isobandas.features
                 .map((feature) => {
@@ -653,7 +737,9 @@ async function drawRaster() {
                         recortada = turf.intersect(estruturada, limiteRegiao);
                     } catch (erro) {
                         console.warn("Falha ao recortar isobanda à região; mantida sem recorte:", erro);
-                        return feature;
+                        // A banda "sem ondas" sem recorte pintaria todo o
+                        // retângulo do raster — nesse caso descarta-se.
+                        return feature.properties.corIndice < 0 ? null : feature;
                     }
                     if (!recortada) return null; // sem sobreposição nessa classe
                     recortada.properties = feature.properties;
@@ -676,7 +762,8 @@ async function drawRaster() {
             renderer: L.canvas({ pane: "overlayPane" }),
             coordsToLatLng: coordsToLatLng,
             style: (feature) => {
-                const cor = cores[feature.properties.corIndice];
+                const indice = feature.properties.corIndice;
+                const cor = indice < 0 ? CONFIG.COR_SEM_ONDAS : cores[indice];
                 return {
                     fillColor: cor,
                     fillOpacity: fillOpacity,
@@ -831,6 +918,10 @@ async function refreshRaster() {
             return ultimoStatusRaster === 404 ? "em_falta" : "erro";
         }
 
+        currentMascaraTerra = getCurrentVariable()?.semOndasSemValor
+            ? await carregarMascaraTerra()
+            : null;
+
         await drawRaster();
         const elapsed = (performance.now() - t0).toFixed(1);
         console.log(`✔ Raster atualizado (${elapsed} ms)`);
@@ -908,6 +999,12 @@ let rasterMaximum = 1;
 */
 let rasterIsInteger = false;
 
+/*
+    Indica se o raster atual tem pelo menos uma célula com valor. Usado
+    pela legenda: sem valores, na intensidade máxima, é tudo "Sem ondas".
+*/
+let rasterTemValores = true;
+
 function updateRasterStretch() {
     if (!currentRaster) {
         return;
@@ -915,20 +1012,24 @@ function updateRasterStretch() {
 
     rasterMinimum = currentRaster.mins?.[0];
     rasterMaximum = currentRaster.maxs?.[0];
+    rasterIsInteger = valoresSaoTodosInteiros(currentRaster.values?.[0]);
 
-    if (
-        rasterMinimum === undefined ||
-        rasterMaximum === undefined ||
-        rasterMinimum === rasterMaximum ||
-        !isFinite(rasterMinimum) ||
-        !isFinite(rasterMaximum)
-    ) {
-        console.warn("Stretch inválido. A utilizar 0-1.");
+    rasterTemValores = Number.isFinite(rasterMinimum) && Number.isFinite(rasterMaximum);
+
+    if (!rasterTemValores) {
+        // Nenhuma célula com valor (ex.: intensidade máxima numa região
+        // sem ondas nesse ano) — a legenda mostra só "Sem ondas".
+        console.warn("Raster sem valores. A utilizar 0-1.");
         rasterMinimum = 0;
         rasterMaximum = 1;
     }
-
-    rasterIsInteger = valoresSaoTodosInteiros(currentRaster.values?.[0]);
+    else if (rasterMinimum === rasterMaximum && !rasterIsInteger) {
+        // Valor único contínuo (ex.: uma só célula com ondas): um
+        // intervalo à volta dele, em vez de 0–1 sem relação com o valor.
+        // Um valor único inteiro fica como está: uma classe só.
+        rasterMinimum -= 0.5;
+        rasterMaximum += 0.5;
+    }
 
     console.log("Stretch:");
     console.log({

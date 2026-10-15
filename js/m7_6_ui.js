@@ -90,7 +90,12 @@ function updateLegend() {
         html += `<p class="legend-subtitle">${variavel.label}${unidade}</p>`;
     }
 
-    if (paletaBase.length > 0) {
+    const semValores = (typeof rasterTemValores === "boolean") && !rasterTemValores;
+
+    if (semValores && variavel?.semOndasSemValor) {
+        // Região sem nenhuma onda neste período: só a cor neutra.
+        html += `<div class="legend-sem-ondas"><span style="background: ${CONFIG.COR_SEM_ONDAS};"></span>Sem ondas em toda a região</div>`;
+    } else if (paletaBase.length > 0) {
         const n = calcularClasses(min, max, ehInteiro);
         const cores = sampleColors(paletaBase, n);
 
@@ -109,14 +114,24 @@ function updateLegend() {
 
         html += `<div class="legend-gradient" style="background: ${gradiente};"></div>`;
 
-        // Marcas nos limites das classes (min, cada fronteira, max).
-        html += `<div class="legend-ticks">`;
-        for (let i = 0; i <= n; i++) {
-            const valor = min + (max - min) * (i / n);
-            const rotulo = ehInteiro ? Math.round(valor) : valor.toFixed(1);
-            html += `<span>${rotulo}</span>`;
+        if (classePorValor(min, max, ehInteiro)) {
+            // Uma classe por valor inteiro: o valor ao centro de cada cor.
+            html += `<div class="legend-ticks centrados">`;
+            for (let i = 0; i < n; i++) {
+                html += `<span>${Math.round(min) + i}</span>`;
+            }
+        } else {
+            // Marcas nos limites das classes (min, cada fronteira, max).
+            html += `<div class="legend-ticks">`;
+            for (const valor of calcularLimites(min, max, ehInteiro)) {
+                html += `<span>${ehInteiro ? Math.round(valor) : valor.toFixed(1)}</span>`;
+            }
         }
         html += `</div>`;
+
+        if (variavel?.semOndasSemValor) {
+            html += `<div class="legend-sem-ondas"><span style="background: ${CONFIG.COR_SEM_ONDAS};"></span>Sem ondas</div>`;
+        }
     } else {
         html += `<p><small>Nenhuma palete de cores definida.</small></p>`;
     }
