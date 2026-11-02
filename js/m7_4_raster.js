@@ -18,7 +18,8 @@
 ============================================================================= */
 
 /*
-    Raster atualmente carregado.
+    Último raster descarregado. Se a seleção mudar a meio de um
+    carregamento pode não ser o desenhado: esse é o de currentDatasetURL.
 */
 let currentRaster = null;
 
@@ -26,6 +27,12 @@ let currentRaster = null;
     Layer Leaflet atualmente desenhado.
 */
 let currentRasterLayer = null;
+
+/*
+    Partilhado por todas as camadas: o Leaflet não retira o renderer do
+    mapa com a camada, e um novo a cada desenho deixava um <canvas> para trás.
+*/
+const rendererRaster = L.canvas({ pane: "overlayPane" });
 
 /*
     Último URL carregado.
@@ -142,14 +149,17 @@ async function loadNutsSlugs() {
     }
     try {
         const response = await fetch("data/nuts_slugs.json");
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
         nutsSlugs = await response.json();
         return nutsSlugs;
     }
     catch (error) {
         console.error("Erro ao carregar data/nuts_slugs.json:");
         console.error(error);
-        nutsSlugs = {};
-        return nutsSlugs;
+        // Sem guardar em cache, para "Tentar de novo" voltar a pedir o ficheiro.
+        return {};
     }
 }
 
@@ -178,6 +188,20 @@ function buildDatasetURL(variavel = APP_STATE.variavel) {
 }
 
 /*
+    parseGeoraster() não falha perante algo que não seja um TIFF (ex.: a
+    página HTML de um portal de rede): a promessa nunca termina e o mapa
+    ficava preso em "A carregar…". Por isso confirma-se primeiro a assinatura.
+*/
+function lerGeoraster(arrayBuffer) {
+    const [a, b] = new Uint8Array(arrayBuffer, 0, Math.min(2, arrayBuffer.byteLength));
+    const eTiff = (a === 0x49 && b === 0x49) || (a === 0x4d && b === 0x4d);
+    if (!eTiff) {
+        throw new Error("A resposta não é um GeoTIFF.");
+    }
+    return parseGeoraster(arrayBuffer);
+}
+
+/*
     Na intensidade máxima, uma célula sem valor pode ser terra sem ondas
     OU fora de terra (mar, Espanha, água excluída no pipeline). O
     numero_eventos da mesma seleção (ano/estatística e região) distingue
@@ -195,7 +219,7 @@ async function carregarMascaraTerra() {
         if (!response.ok) {
             return null;
         }
-        return await parseGeoraster(await response.arrayBuffer());
+        return await lerGeoraster(await response.arrayBuffer());
     }
     catch (erro) {
         console.warn("Máscara de terra não carregada:", erro);
@@ -280,7 +304,7 @@ async function loadRasterComURL(rasterURL) {
             "bytes"
         );
 
-        const georaster = await parseGeoraster(arrayBuffer);
+        const georaster = await lerGeoraster(arrayBuffer);
         if (!georaster) {
             throw new Error("parseGeoraster() devolveu null.");
         }
@@ -576,23 +600,24 @@ function estruturarAneis(feature) {
 async function drawRaster() {
     if (!APP_STATE.map) {
         console.error("O mapa ainda não foi inicializado.");
-        return;
+        return false;
     }
 
     if (!currentRaster) {
         console.warn("Nenhum raster carregado.");
-        return;
+        return false;
     }
 
     console.log("========================================");
     console.log("drawRaster()");
     console.log(currentRaster);
 
-    // Remove o layer anterior de forma segura
-    removeRasterLayer();
-
     // Atualiza o stretch
     updateRasterStretch();
+
+    // A camada anterior só sai quando esta estiver pronta, para o mapa não
+    // ficar vazio enquanto se calculam as isobandas.
+    let novaCamada;
 
     // Cria o layer
     //
@@ -756,10 +781,10 @@ async function drawRaster() {
 
         const fillOpacity = Math.max(0, Math.min(1, APP_STATE.opacidade));
 
-        currentRasterLayer = L.geoJSON(isobandas, {
+        novaCamada = L.geoJSON(isobandas, {
             pane: "overlayPane",     // ← OBRIGATÓRIO
             interactive: false,
-            renderer: L.canvas({ pane: "overlayPane" }),
+            renderer: rendererRaster,
             coordsToLatLng: coordsToLatLng,
             style: (feature) => {
                 const indice = feature.properties.corIndice;
@@ -787,8 +812,11 @@ async function drawRaster() {
     catch (error) {
         console.error("Erro ao criar o raster (isobandas/GeoJSON):");
         console.error(error);
-        return;
+        return false;
     }
+
+    removeRasterLayer();
+    currentRasterLayer = novaCamada;
 
     // Adiciona ao rasterGroup se existir, senão adiciona ao mapa diretamente
     try {
@@ -824,7 +852,7 @@ async function drawRaster() {
         console.log("Bounds do layer:", currentRasterLayer.getBounds());
         console.log("Bounds do mapa:", APP_STATE.map.getBounds());
 
-        return;
+        return false;
 
     }
 
@@ -844,6 +872,7 @@ async function drawRaster() {
     }
 
     console.log("✔ Raster desenhado.");
+    return true;
 }
 
 /* =============================================================================
@@ -854,9 +883,15 @@ async function drawRaster() {
 let lastLoadedNuts = null;
 
 /*
-    Devolve "em_falta" (404: não existe camada para a seleção atual),
-    "erro" (outra falha a carregar), "obsoleto" (pedido adiado porque
-    outro raster está a carregar) ou null nos restantes casos.
+    Identifica a chamada mais recente de updateRaster(): as anteriores já não
+    podem mexer no mapa, na legenda nem nos avisos.
+*/
+let ultimaAtualizacaoMapa = 0;
+
+/*
+    Devolve "em_falta" (404: não existe camada para a seleção atual), "erro"
+    (outra falha a carregar ou a desenhar), "obsoleto" (pedido substituído
+    por outro) ou nada quando o mapa fica atualizado.
 */
 async function refreshRaster() {
     if (rasterLoading) {
@@ -865,10 +900,29 @@ async function refreshRaster() {
         return "obsoleto";
     }
 
+    const chamada = ultimaAtualizacaoMapa;
     const novoDatasetURL = await getCurrentDatasetURL();
+
+    // Um pedido entretanto substituído é ignorado, mesmo que a seleção tenha
+    // voltado à mesma (A→B→A).
+    if (chamada !== ultimaAtualizacaoMapa) {
+        console.warn("Resposta de um pedido anterior — ignorada.");
+        return "obsoleto";
+    }
+
+    // Outro pedido começou a carregar durante este await. Enquanto carrega,
+    // a camada visível ainda é a anterior, por isso a verificação de "já
+    // atualizado" abaixo não seria fiável.
+    if (rasterLoading) {
+        refreshPendente = true;
+        return "obsoleto";
+    }
+
     if (!novoDatasetURL) {
         console.warn("Não foi possível resolver o caminho do dataset.");
-        return;
+        clearRaster();
+        lastLoadedNuts = null;
+        return "erro";
     }
 
     const layerAtivoNoGrupo = currentRasterLayer && window.rasterGroup && window.rasterGroup.hasLayer(currentRasterLayer);
@@ -899,18 +953,18 @@ async function refreshRaster() {
     console.log("refreshRaster() -> Novo dataset, nova NUTS ou renderização necessária!");
 
     try {
-        removeRasterLayer();
-        currentDatasetURL = novoDatasetURL;
-
-        // Atualiza a NUTS que estamos prestes a carregar
-        lastLoadedNuts = APP_STATE.nuts;
-
         // Se a NUTS mudou ou o URL mudou, forçamos um novo carregamento do ficheiro
         let georaster = null;
         georaster = await loadRasterComURL(novoDatasetURL);
 
         if (!georaster) {
             console.warn("O raster não foi carregado.");
+
+            // A seleção mudou: esta falha já não importa e o mapa fica como estava.
+            if (buildDatasetURL() !== novoDatasetURL) {
+                return "obsoleto";
+            }
+
             // Sem isto a legenda e o estado continuavam no ano anterior
             // com o slider já no ano sem dados.
             clearRaster();
@@ -922,15 +976,37 @@ async function refreshRaster() {
             ? await carregarMascaraTerra()
             : null;
 
-        await drawRaster();
+        // A seleção mudou durante o download. A paleta e a variável usadas
+        // no desenho já seriam as novas, por isso este raster não se desenha:
+        // o mapa fica como estava até chegar o da seleção atual.
+        if (buildDatasetURL() !== novoDatasetURL) {
+            return "obsoleto";
+        }
+
+        if (!await drawRaster()) {
+            throw new Error("O raster não foi desenhado.");
+        }
+
+        // Só agora: enquanto carrega, estes descrevem a camada ainda visível.
+        currentDatasetURL = novoDatasetURL;
+        lastLoadedNuts = APP_STATE.nuts;
+
         const elapsed = (performance.now() - t0).toFixed(1);
         console.log(`✔ Raster atualizado (${elapsed} ms)`);
     }
     catch (error) {
         console.error("Erro durante refreshRaster():");
         console.error(error);
-        currentDatasetURL = null;
+
+        // A seleção mudou: esta falha já não importa e o mapa fica como estava.
+        if (buildDatasetURL() !== novoDatasetURL) {
+            return "obsoleto";
+        }
+
+        // Sem o mapa novo, a camada anterior mostraria outra seleção.
+        clearRaster();
         lastLoadedNuts = null;
+        return "erro";
     }
     finally {
         rasterLoading = false;
@@ -942,10 +1018,17 @@ async function refreshRaster() {
     }
 }
 
+/* Ex.: "o mapa de 2017", ou só "o mapa" numa estatística sem ano. */
+function descreverMapaAtual() {
+    return APP_STATE.estatistica === "ano" ? `o mapa de ${APP_STATE.ano}` : "o mapa";
+}
+
 /*
    Atualiza completamente o mapa.
 */
 async function updateRaster() {
+    const estaAtualizacao = ++ultimaAtualizacaoMapa;
+
     console.log("========================================");
     console.log("updateRaster()");
 
@@ -958,6 +1041,7 @@ async function updateRaster() {
     // região antes de ver dados sobrepostos.
     if (!APP_STATE.nuts) {
         clearRaster();
+        definirEstado("map-status", null);
         if (typeof showLegendPlaceholder === 'function') {
             showLegendPlaceholder("Seleciona uma região (NUTS II) para visualizar o raster.");
         }
@@ -966,17 +1050,31 @@ async function updateRaster() {
         return;
     }
 
+    const mapaPedido = descreverMapaAtual();
+    definirEstado("map-status", "carregar", `A carregar ${mapaPedido}…`);
+
+    // Sem camada visível, a legenda não tem nenhuma escala a manter.
+    if (!currentRasterLayer) {
+        showLegendPlaceholder("A carregar a legenda…");
+    }
+
     const falha = await refreshRaster();
 
-    if (falha === "em_falta") {
-        showLegendPlaceholder("Não existe camada para esta seleção (por exemplo, um ano sem eventos).");
-    }
-    else if (falha === "erro") {
-        showLegendPlaceholder("Não foi possível carregar os dados.");
-    }
-    // "obsoleto": a legenda fica a cargo do pedido da seleção atual
-    else if (falha !== "obsoleto") {
-        updateLegend();
+    // "obsoleto" ou chamada substituída: fica a cargo do pedido mais recente
+    if (falha !== "obsoleto" && estaAtualizacao === ultimaAtualizacaoMapa) {
+        if (falha === "em_falta") {
+            showLegendPlaceholder("Não existe camada para esta seleção (por exemplo, um ano sem eventos).");
+            // Em ecrãs pequenos a legenda pode estar recolhida.
+            definirEstado("map-status", "vazio", "Não existe camada para esta seleção.");
+        }
+        else if (falha === "erro") {
+            showLegendPlaceholder("Sem legenda: o mapa não foi carregado.");
+            definirEstado("map-status", "erro", `Não foi possível carregar ${mapaPedido}.`, updateRaster);
+        }
+        else {
+            updateLegend();
+            definirEstado("map-status", null);
+        }
     }
 
     // Mantém as duas Séries Temporais (regional e do ponto) sempre
@@ -1149,6 +1247,11 @@ async function updatePointTimeSeries(lat, lng) {
 
     const pedido = `${metodo}|${evento}|${variavel}|${lat}|${lng}`;
     seriePontoPedido = pedido;
+    definirEstado("point-chart-status", "carregar", "A carregar a série…");
+
+    // Um ano que não se conseguiu ler não é um ano sem valor: sem isto, uma
+    // falha de rede parecia um ponto "sem valores".
+    let houveFalha = false;
 
     try {
         const valores = await Promise.all(anos.map(async (ano) => {
@@ -1167,15 +1270,18 @@ async function updatePointTimeSeries(lat, lng) {
                     if (!response.ok) {
                         if (response.status === 404) {
                             pixelSeriesCache[chave] = null;
+                        } else {
+                            houveFalha = true;
                         }
                         return null;
                     }
                     const arrayBuffer = await response.arrayBuffer();
-                    georaster = await parseGeoraster(arrayBuffer);
+                    georaster = await lerGeoraster(arrayBuffer);
                     pixelSeriesCache[chave] = georaster;
                 }
                 catch (error) {
                     console.warn("Falha ao carregar", path, error);
+                    houveFalha = true;
                     return null;
                 }
             }
@@ -1194,11 +1300,32 @@ async function updatePointTimeSeries(lat, lng) {
         if (typeof updatePointChart === "function") {
             updatePointChart(anos, valores);
         }
+
+        if (houveFalha) {
+            definirEstado("point-chart-status", "erro", "Não foi possível carregar a série deste ponto.", refreshPointTimeSeries);
+        } else if (serieSemValores(valores)) {
+            definirEstado("point-chart-status", "vazio", mensagemPontoSemValores());
+        } else {
+            definirEstado("point-chart-status", null);
+        }
     }
     catch (error) {
         console.error("Erro ao calcular série temporal do ponto:");
         console.error(error);
+        if (seriePontoPedido === pedido) {
+            definirEstado("point-chart-status", "erro", "Não foi possível carregar a série deste ponto.", refreshPointTimeSeries);
+        }
     }
+}
+
+function serieSemValores(valores) {
+    return valores.every((valor) => valor === null || valor === undefined);
+}
+
+function mensagemPontoSemValores() {
+    return getCurrentVariable()?.semOndasSemValor
+        ? "Sem valores neste ponto: fora de terra ou sem ondas em toda a série."
+        : "Sem valores neste ponto: fora de terra. Clica noutro local.";
 }
 
 /*
@@ -1268,6 +1395,9 @@ async function loadStatsSeriesTable() {
         return statsSeriesTable;
     }
     const response = await fetch("data/stats_series.json");
+    if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+    }
     statsSeriesTable = await response.json();
     return statsSeriesTable;
 }
@@ -1281,6 +1411,8 @@ async function refreshRegionalTimeSeries() {
     console.log("========================================");
     console.log("Série temporal regional (tabela pré-calculada)");
 
+    definirEstado("regional-chart-status", "carregar", "A carregar a série…");
+
     try {
         const tabela = await loadStatsSeriesTable();
         const chave = `${APP_STATE.metodo}|${APP_STATE.evento}|${APP_STATE.variavel}|${APP_STATE.nuts || ""}`;
@@ -1288,20 +1420,26 @@ async function refreshRegionalTimeSeries() {
 
         if (!serie) {
             console.warn("Sem série pré-calculada para:", chave);
-            return;
         }
 
         console.log("Série temporal regional:", serie);
 
-        const { labels, valores } = serieParaGrafico(serie);
+        const { labels, valores } = serieParaGrafico(serie || []);
 
         if (typeof updateRegionalChart === "function") {
             updateRegionalChart(labels, valores);
+        }
+
+        if (serieSemValores(valores)) {
+            definirEstado("regional-chart-status", "vazio", "Sem valores nesta região para esta variável.");
+        } else {
+            definirEstado("regional-chart-status", null);
         }
     }
     catch (error) {
         console.error("Erro ao obter série temporal regional:");
         console.error(error);
+        definirEstado("regional-chart-status", "erro", "Não foi possível carregar a série regional.", refreshRegionalTimeSeries);
     }
 }
 

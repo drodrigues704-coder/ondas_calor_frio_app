@@ -158,6 +158,8 @@
         <!-- Mapa -->
         <main id="map-container">
             <div id="map"></div>
+            <!-- Carregamento e erros do mapa (m7_6_ui.js, definirEstado) -->
+            <div id="map-status" role="status"></div>
             <!-- Legenda Dinâmica -->
             <div id="legend"></div>
             <!-- Colapsa/expande a legenda em ecrãs pequenos, onde não pode
@@ -174,10 +176,16 @@
         <aside id="right-panel">
             <section class="panel-content">
                 <h2>Série Temporal Regional</h2>
-                <canvas id="regional-chart" height="220"></canvas>
+                <div class="chart-box">
+                    <div id="regional-chart-status" class="chart-status" role="status"></div>
+                    <canvas id="regional-chart" height="220"></canvas>
+                </div>
                 <hr>
                 <h2>Série Temporal do Ponto</h2>
-                <canvas id="point-chart" height="220"></canvas>
+                <div class="chart-box">
+                    <div id="point-chart-status" class="chart-status" role="status"></div>
+                    <canvas id="point-chart" height="220"></canvas>
+                </div>
             </section>
         </aside>
 

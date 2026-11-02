@@ -433,6 +433,7 @@ function loadMockCharts() {
 function initializeCharts() {
     console.log("Inicializando módulo de gráficos...");
     resetCharts();
+    definirEstado("point-chart-status", "vazio", "Clica num ponto do mapa para veres a série desse local.");
 }
 
 /*

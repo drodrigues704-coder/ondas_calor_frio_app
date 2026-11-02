@@ -42,6 +42,74 @@ function showMessage(message) {
 }
 
 /* ============================================================================
+    ESTADOS DE CARREGAMENTO, VAZIO E ERRO (MAPA E GRÁFICOS)
+============================================================================ */
+
+/*
+    Abaixo disto o aviso de carregamento não chega a aparecer: evita que
+    pisque nas respostas rápidas.
+*/
+const ATRASO_AVISO_CARREGAR_MS = 200;
+
+const temporizadoresEstado = new Map();
+
+function escreverEstado(alvo, tipo, mensagem, aoTentarDeNovo) {
+    alvo.replaceChildren();
+
+    if (!tipo) {
+        delete alvo.dataset.estado;
+        return;
+    }
+
+    alvo.dataset.estado = tipo;
+
+    const caixa = document.createElement("div");
+    caixa.className = "estado-caixa";
+
+    const texto = document.createElement("span");
+    texto.textContent = mensagem;
+    caixa.append(texto);
+
+    if (aoTentarDeNovo) {
+        const botao = document.createElement("button");
+        botao.type = "button";
+        botao.className = "estado-acao";
+        botao.textContent = "Tentar de novo";
+        botao.addEventListener("click", () => aoTentarDeNovo());
+        caixa.append(botao);
+    }
+
+    alvo.append(caixa);
+}
+
+/*
+    Mostra um estado em #map-status ou em .chart-status. tipo: "carregar",
+    "vazio", "erro", ou null para limpar. Um estado novo substitui sempre o
+    anterior, incluindo um aviso de carregamento ainda por aparecer.
+*/
+function definirEstado(alvoId, tipo, mensagem, aoTentarDeNovo) {
+    const alvo = document.getElementById(alvoId);
+    if (!alvo) return;
+
+    clearTimeout(temporizadoresEstado.get(alvoId));
+
+    if (tipo !== "carregar") {
+        escreverEstado(alvo, tipo, mensagem, aoTentarDeNovo);
+        return;
+    }
+
+    // Um erro ou indicação anterior já não se aplica durante o carregamento.
+    if (alvo.dataset.estado !== "carregar") {
+        escreverEstado(alvo, null);
+    }
+
+    temporizadoresEstado.set(
+        alvoId,
+        setTimeout(() => escreverEstado(alvo, tipo, mensagem), ATRASO_AVISO_CARREGAR_MS)
+    );
+}
+
+/* ============================================================================
     SINCRONIZAÇÃO DE LABELS
 ============================================================================ */
 
@@ -255,6 +323,7 @@ window.updateInterface = updateInterface;
 window.refreshUI = refreshUI;
 window.updateLegend = updateLegend;
 window.showLegendPlaceholder = showLegendPlaceholder;
+window.definirEstado = definirEstado;
 window.toggleLegend = toggleLegend;
 window.initializeLegendToggle = initializeLegendToggle;
 window.updateYearLabel = updateYearLabel;
