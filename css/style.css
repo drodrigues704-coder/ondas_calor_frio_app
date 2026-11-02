@@ -21,8 +21,20 @@
     --border: #262d3a;
     --text: #e5e9f0;
     --text-muted: #8b95a5;
-    --accent: #3b82f6;
-    --accent-hover: #2563eb;
+    /* Acento do evento ativo: quente nas ondas de calor, frio nas de frio
+       (html[data-evento], definido em m7_3_controls.js). --accent é para
+       fundos com texto branco; --accent-text para texto e foco sobre o painel. */
+    --accent: #c2410c;
+    --accent-hover: #a93a0b;
+    --accent-text: #fb923c;
+    --accent-ring: rgba(251, 146, 60, 0.25);
+}
+
+:root[data-evento="Cold"] {
+    --accent: #2f6db5;
+    --accent-hover: #285d9b;
+    --accent-text: #7db4ea;
+    --accent-ring: rgba(125, 180, 234, 0.25);
 }
 
 /* ============================================================================
@@ -157,6 +169,10 @@ h2 {
     color: var(--text-muted);
 }
 
+#about-panel a {
+    color: var(--accent-text);
+}
+
 #about-panel summary {
     cursor: pointer;
     font-weight: 600;
@@ -220,16 +236,108 @@ select {
 
 select:focus {
     outline: none;
-    border-color: var(--accent);
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+    border-color: var(--accent-text);
+    box-shadow: 0 0 0 2px var(--accent-ring);
 }
 
 /* Slider de Ano */
-#year-slider {
-    width: 100%;
+.year-track {
+    --thumb: 8px;
+    --altura: 30px;
+    position: relative;
+    height: var(--altura);
     margin-top: 6px;
+}
+
+/* O centro de cada faixa coincide com a posição do cursor nesse ano: o cursor
+   anda entre thumb/2 e 100% - thumb/2, em n-1 intervalos da largura de uma faixa. */
+.year-stripes {
+    --n-anos: 35;
+    --recuo: calc((var(--thumb) - (100% - var(--thumb)) / (var(--n-anos) - 1)) / 2);
+    position: absolute;
+    top: 4px;
+    bottom: 4px;
+    left: var(--recuo);
+    right: var(--recuo);
+    display: flex;
+    overflow: hidden;
+    border-radius: 3px;
+    background: var(--panel-alt);
+    transition: opacity 0.15s ease-out;
+}
+
+.year-stripes span {
+    flex: 1;
+}
+
+/* Com atraso, para não piscar quando a série chega depressa. */
+.year-stripes.a-carregar,
+.year-stripes-note.a-carregar {
+    opacity: 0.45;
+    transition-delay: 0.2s;
+}
+
+#year-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    background: transparent;
     cursor: pointer;
-    accent-color: var(--accent);
+    /* Sem a animação geral dos controlos: o cursor e o foco respondem logo. */
+    transition: none;
+}
+
+#year-slider:disabled {
+    cursor: default;
+}
+
+#year-slider:focus-visible {
+    outline: 2px solid var(--accent-text);
+    outline-offset: 2px;
+    border-radius: 3px;
+}
+
+#year-slider::-webkit-slider-runnable-track {
+    height: var(--altura);
+    background: transparent;
+}
+
+#year-slider::-moz-range-track {
+    height: var(--altura);
+    background: transparent;
+}
+
+#year-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    box-sizing: border-box;
+    width: var(--thumb);
+    height: var(--altura);
+    background: #ffffff;
+    border: 2px solid var(--bg);
+    border-radius: 3px;
+}
+
+#year-slider::-moz-range-thumb {
+    box-sizing: border-box;
+    width: var(--thumb);
+    height: var(--altura);
+    background: #ffffff;
+    border: 2px solid var(--bg);
+    border-radius: 3px;
+}
+
+/* Numa estatística sem ano (Média, Mediana, Máximo), nenhum ano está escolhido. */
+#year-slider:disabled::-webkit-slider-thumb {
+    visibility: hidden;
+}
+
+#year-slider:disabled::-moz-range-thumb {
+    visibility: hidden;
 }
 
 #year-value {
@@ -237,7 +345,15 @@ select:focus {
     font-weight: 700;
     font-size: 15px;
     margin-top: 8px;
-    color: var(--accent);
+    color: var(--accent-text);
+}
+
+.year-stripes-note {
+    transition: opacity 0.15s ease-out;
+    margin-top: 6px;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--text-muted);
 }
 
 /* Alternador de Metodologia (OMM / Percentis) */
@@ -321,6 +437,25 @@ select:focus {
    raster, forçando-lhes fundo/tamanho errados. As cores dos eixos/grelha
    dos gráficos (tema escuro) são definidas em m7_5_charts.js, não aqui —
    o Chart.js pinta o texto/linhas diretamente no canvas, CSS não alcança. */
+.chart-downloads {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+/* Visíveis, mas desativados, tal como #download-button:disabled. */
+.chart-download:disabled {
+    flex: 1;
+    padding: 7px 10px;
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-muted);
+    font-size: 13px;
+    font-weight: 700;
+    cursor: not-allowed;
+}
+
 #regional-chart,
 #point-chart {
     display: block;
@@ -412,7 +547,7 @@ select:focus {
 }
 
 .estado-acao:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--accent-text);
     outline-offset: 2px;
 }
 
@@ -420,11 +555,20 @@ select:focus {
     .estado-acao {
         min-height: 44px;
     }
+
+    /* Área de toque do slider. O cursor engrossa, e as faixas acertam-se
+       sozinhas porque a sua posição é calculada a partir de --thumb. */
+    .year-track {
+        --thumb: 12px;
+        --altura: 44px;
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {
     #regional-chart,
-    #point-chart {
+    #point-chart,
+    .year-stripes,
+    .year-stripes-note {
         transition: none;
     }
 }
@@ -725,21 +869,10 @@ select:focus {
         justify-content: center;
     }
 
-    /* A altura do próprio <input type="range"> aumenta a área de toque à
-       volta do thumb (o browser centra-o verticalmente na caixa) sem
-       alterar o aspeto nativo (accent-color continua a aplicar-se). */
-    #year-slider {
-        height: 44px;
-    }
-
-    #year-slider::-webkit-slider-thumb {
-        width: 26px;
-        height: 26px;
-    }
-
-    #year-slider::-moz-range-thumb {
-        width: 26px;
-        height: 26px;
+    /* A mesma área de toque de @media (pointer: coarse), em ecrãs estreitos. */
+    .year-track {
+        --thumb: 12px;
+        --altura: 44px;
     }
 
     .leaflet-control-zoom a {

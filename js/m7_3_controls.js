@@ -258,6 +258,9 @@ function onEventChanged() {
 
     console.log("Evento alterado para:", APP_STATE.evento);
 
+    // Muda o acento da interface (ver :root[data-evento] em style.css).
+    document.documentElement.dataset.evento = APP_STATE.evento;
+
     updateRaster();
 
 }

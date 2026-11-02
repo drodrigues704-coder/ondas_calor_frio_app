@@ -160,7 +160,7 @@ function datasetSemOndas(values) {
         clip: false, // a marca fica junto à base: não a cortar em gráficos baixos
         pointStyle: "rectRot",
         pointRadius: 5,
-        pointHoverRadius: 7,
+        pointHoverRadius: 5,
         borderColor: CONFIG.COR_SEM_ONDAS,
         backgroundColor: CONFIG.COR_SEM_ONDAS
     };
@@ -168,8 +168,8 @@ function datasetSemOndas(values) {
 
 /*
     Opções partilhadas pelos dois gráficos para as marcas "Sem ondas":
-    eixo próprio (não mexe na escala dos valores), legenda só quando há
-    marcas, e tooltip "Sem ondas" em vez do valor fictício da marca.
+    eixo próprio (não mexe na escala dos valores) e legenda só quando há
+    marcas.
 */
 const ESCALA_SEM_ONDAS = { axis: "y", display: false, min: 0, max: 1 };
 
@@ -178,11 +178,17 @@ function filtrarLegendaSemOndas(item, data) {
     return dataset.yAxisID !== "semOndas" || dataset.data.some((v) => v !== null);
 }
 
-function rotuloTooltip(contexto) {
-    if (contexto.dataset.yAxisID === "semOndas") {
-        return "Sem ondas";
-    }
-    return `${contexto.dataset.label}: ${contexto.formattedValue}`;
+/*
+    Os gráficos mostram só a forma da série, sem pontos nem pop-ups: os
+    valores ficam para o CSV. A exceção é um ano com valor entre dois anos sem
+    valor: sem linha que o ligue aos vizinhos, sem ponto desapareceria.
+*/
+function raioPontoIsolado(contexto) {
+    const dados = contexto.dataset.data;
+    const i = contexto.dataIndex;
+    const temValor = (valor) => valor !== null && valor !== undefined;
+
+    return temValor(dados[i]) && !temValor(dados[i - 1]) && !temValor(dados[i + 1]) ? 3 : 0;
 }
 
 /* ============================================================================
@@ -218,8 +224,8 @@ function createRegionalChart(labels, values) {
                     backgroundColor: colors.background,
                     borderWidth: 2,
                     fill: true,
-                    pointRadius: 3,
-                    pointHoverRadius: 6,
+                    pointRadius: raioPontoIsolado,
+                    pointHoverRadius: raioPontoIsolado,
                     tension: 0.4
                 },
                 datasetSemOndas(values)
@@ -228,18 +234,12 @@ function createRegionalChart(labels, values) {
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            interaction: {
-                intersect: false,
-                mode: "index"
-            },
             plugins: {
                 legend: {
                     display: true,
                     labels: { color: "#c5cbd6", filter: filtrarLegendaSemOndas }
                 },
-                tooltip: {
-                    callbacks: { label: rotuloTooltip }
-                },
+                tooltip: { enabled: false },
                 title: {
                     display: true,
                     text: "Evolução Temporal Regional",
@@ -301,8 +301,8 @@ function createPointChart(labels, values) {
                     backgroundColor: colors.background,
                     borderWidth: 2,
                     fill: true,
-                    pointRadius: 4,
-                    pointHoverRadius: 7,
+                    pointRadius: raioPontoIsolado,
+                    pointHoverRadius: raioPontoIsolado,
                     tension: 0.4
                 },
                 datasetSemOndas(values)
@@ -311,18 +311,12 @@ function createPointChart(labels, values) {
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            interaction: {
-                intersect: false,
-                mode: "index"
-            },
             plugins: {
                 legend: {
                     display: true,
                     labels: { color: "#c5cbd6", filter: filtrarLegendaSemOndas }
                 },
-                tooltip: {
-                    callbacks: { label: rotuloTooltip }
-                },
+                tooltip: { enabled: false },
                 title: {
                     display: true,
                     text: "Evolução Temporal do Ponto",

@@ -14,6 +14,7 @@
     • Mensagens de estado e feedback ao utilizador
     • Painel dinâmico de estatísticas territoriais
     • Legenda de classes do mapa base
+    • Faixas do ano, atrás do slider
     • Sincronização de labels do estado da aplicação
 ******************************************************************************/
 
@@ -107,6 +108,66 @@ function definirEstado(alvoId, tipo, mensagem, aoTentarDeNovo) {
         alvoId,
         setTimeout(() => escreverEstado(alvo, tipo, mensagem), ATRASO_AVISO_CARREGAR_MS)
     );
+}
+
+/* ============================================================================
+    FAIXAS DO ANO (MÉDIA DA REGIÃO EM CADA ANO, ATRÁS DO SLIDER)
+============================================================================ */
+
+const FORMATO_VALOR_FAIXAS = new Intl.NumberFormat("pt-PT", { maximumFractionDigits: 1 });
+
+/*
+    Pinta uma faixa por ano com a palete do evento, na escala mínimo–máximo da
+    própria série (por isso a nota indica sempre esse intervalo). Um ano sem
+    valor fica na cor "Sem ondas" nas variáveis onde isso tem esse significado;
+    nas outras fica sem cor. Sem nenhum valor, as faixas ficam vazias.
+*/
+function atualizarFaixasAno(valores) {
+    const faixas = document.getElementById("year-stripes");
+    const nota = document.getElementById("year-stripes-note");
+    if (!faixas || !nota) return;
+
+    faixas.classList.remove("a-carregar");
+    nota.classList.remove("a-carregar");
+
+    const validos = valores.filter((valor) => Number.isFinite(valor));
+    if (validos.length === 0) {
+        faixas.replaceChildren();
+        nota.textContent = "";
+        return;
+    }
+
+    const variavel = getCurrentVariable();
+    const paleta = getCurrentPalette();
+    const min = Math.min(...validos);
+    const max = Math.max(...validos);
+    const amplitude = max - min;
+
+    faixas.style.setProperty("--n-anos", valores.length);
+    faixas.replaceChildren(...valores.map((valor) => {
+        const faixa = document.createElement("span");
+        if (Number.isFinite(valor)) {
+            const posicao = amplitude > 0 ? (valor - min) / amplitude : 0;
+            faixa.style.background = paleta[Math.round(posicao * (paleta.length - 1))];
+        } else if (variavel?.semOndasSemValor) {
+            faixa.style.background = CONFIG.COR_SEM_ONDAS;
+        }
+        return faixa;
+    }));
+
+    const territorio = APP_STATE.nuts ? "da região" : "do país";
+    const unidade = variavel?.unidade ? ` ${variavel.unidade}` : "";
+    const semOndas = variavel?.semOndasSemValor && validos.length < valores.length
+        ? " Cinzento-esverdeado: sem ondas."
+        : "";
+    nota.textContent = `Cada faixa é um ano: média ${territorio}, de `
+        + `${FORMATO_VALOR_FAIXAS.format(min)} a ${FORMATO_VALOR_FAIXAS.format(max)}${unidade}.${semOndas}`;
+}
+
+/* As faixas atuais são de outra seleção até chegar a nova série. */
+function marcarFaixasACarregar() {
+    document.getElementById("year-stripes")?.classList.add("a-carregar");
+    document.getElementById("year-stripes-note")?.classList.add("a-carregar");
 }
 
 /* ============================================================================
@@ -324,6 +385,8 @@ window.refreshUI = refreshUI;
 window.updateLegend = updateLegend;
 window.showLegendPlaceholder = showLegendPlaceholder;
 window.definirEstado = definirEstado;
+window.atualizarFaixasAno = atualizarFaixasAno;
+window.marcarFaixasACarregar = marcarFaixasACarregar;
 window.toggleLegend = toggleLegend;
 window.initializeLegendToggle = initializeLegendToggle;
 window.updateYearLabel = updateYearLabel;

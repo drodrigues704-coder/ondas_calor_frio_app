@@ -1058,6 +1058,11 @@ async function updateRaster() {
         showLegendPlaceholder("A carregar a legenda…");
     }
 
+    // A série não depende do raster e é pedida já: assim, uma resposta antiga
+    // não é tomada por atual, com a palete e a unidade da seleção nova,
+    // enquanto o raster descarrega.
+    const serieRegional = refreshRegionalTimeSeries();
+
     const falha = await refreshRaster();
 
     // "obsoleto" ou chamada substituída: fica a cargo do pedido mais recente
@@ -1079,7 +1084,7 @@ async function updateRaster() {
 
     // Mantém as duas Séries Temporais (regional e do ponto) sempre
     // coerentes com o evento/variável/metodologia/região atuais.
-    await refreshRegionalTimeSeries();
+    await serieRegional;
     await refreshPointTimeSeries();
 }
 
@@ -1297,6 +1302,12 @@ async function updatePointTimeSeries(lat, lng) {
             return;
         }
 
+        // A seleção mudou, mas o pedido da nova série só sai depois do raster.
+        // Esta não se desenha: ficaria com a unidade e a cor da seleção nova.
+        if (APP_STATE.metodo !== metodo || APP_STATE.evento !== evento || APP_STATE.variavel !== variavel) {
+            return;
+        }
+
         if (typeof updatePointChart === "function") {
             updatePointChart(anos, valores);
         }
@@ -1412,6 +1423,7 @@ async function refreshRegionalTimeSeries() {
     console.log("Série temporal regional (tabela pré-calculada)");
 
     definirEstado("regional-chart-status", "carregar", "A carregar a série…");
+    marcarFaixasACarregar();
 
     try {
         const tabela = await loadStatsSeriesTable();
@@ -1429,6 +1441,7 @@ async function refreshRegionalTimeSeries() {
         if (typeof updateRegionalChart === "function") {
             updateRegionalChart(labels, valores);
         }
+        atualizarFaixasAno(valores);
 
         if (serieSemValores(valores)) {
             definirEstado("regional-chart-status", "vazio", "Sem valores nesta região para esta variável.");
@@ -1439,6 +1452,7 @@ async function refreshRegionalTimeSeries() {
     catch (error) {
         console.error("Erro ao obter série temporal regional:");
         console.error(error);
+        atualizarFaixasAno([]);
         definirEstado("regional-chart-status", "erro", "Não foi possível carregar a série regional.", refreshRegionalTimeSeries);
     }
 }
