@@ -180,8 +180,9 @@ function filtrarLegendaSemOndas(item, data) {
 
 /*
     Os gráficos mostram só a forma da série, sem pontos nem pop-ups: os
-    valores ficam para o CSV. A exceção é um ano com valor entre dois anos sem
-    valor: sem linha que o ligue aos vizinhos, sem ponto desapareceria.
+    valores ficam para o CSV (botões ainda desativados). A exceção é um ano com
+    valor entre dois anos sem valor: sem linha que o ligue aos vizinhos, sem
+    ponto desapareceria.
 */
 function raioPontoIsolado(contexto) {
     const dados = contexto.dataset.data;

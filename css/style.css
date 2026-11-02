@@ -431,12 +431,6 @@ select:focus {
     margin-top: 8px;
 }
 
-/* Usamos max-width e um contentor flexível para evitar quebras de proporção do Canvas.
-   Restrito aos canvas dos gráficos Chart.js — um seletor "canvas" genérico
-   também apanhava os tiles <canvas> que o Leaflet cria para desenhar o
-   raster, forçando-lhes fundo/tamanho errados. As cores dos eixos/grelha
-   dos gráficos (tema escuro) são definidas em m7_5_charts.js, não aqui —
-   o Chart.js pinta o texto/linhas diretamente no canvas, CSS não alcança. */
 .chart-downloads {
     display: flex;
     gap: 8px;
@@ -456,6 +450,12 @@ select:focus {
     cursor: not-allowed;
 }
 
+/* Usamos max-width e um contentor flexível para evitar quebras de proporção do Canvas.
+   Restrito aos canvas dos gráficos Chart.js — um seletor "canvas" genérico
+   também apanhava os tiles <canvas> que o Leaflet cria para desenhar o
+   raster, forçando-lhes fundo/tamanho errados. As cores dos eixos/grelha
+   dos gráficos (tema escuro) são definidas em m7_5_charts.js, não aqui —
+   o Chart.js pinta o texto/linhas diretamente no canvas, CSS não alcança. */
 #regional-chart,
 #point-chart {
     display: block;
